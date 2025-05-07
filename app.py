@@ -297,7 +297,7 @@ def process_videos():
             outp = os.path.join(output_folder, f"{base}_variant_{i+1}.mp4")
             hist = os.path.join('static/history', f"{base}_variant_{i+1}.mp4")
             st = ffmpeg.input(src)
-            if opts['contrast'] or	opts['brightness']:
+            if opts['contrast'] or opts['brightness']:
                 c = 1+scale_range(-0.1,0.1,intensity) if opts['contrast'] else 1
                 b = scale_range(-0.05,0.05,intensity) if opts['brightness'] else 0
                 st = st.filter('eq',contrast=c,brightness=b)
@@ -309,7 +309,7 @@ def process_videos():
             if opts['flip'] and random.random()>0.5:
                 st = st.filter('hflip')
 
-            # use copy for audio and capture stderr
+            # copy audio & capture stderr for diagnostics
             stream = ffmpeg.output(st, outp, vcodec='libx264', acodec='copy')
             try:
                 ffmpeg.run(stream, overwrite_output=True, capture_stderr=True)
