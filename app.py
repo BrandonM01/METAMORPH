@@ -70,13 +70,13 @@ def apply_referral(code):
     session['referral_code'] = code
     return redirect(url_for('register'))
 
-@app.route('/register', methods=['GET','POST'])
+@app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         email = request.form['email']
-        pwd   = request.form['password']
+        pwd = request.form['password']
         if User.query.filter_by(email=email).first():
-            flash('⚠️ Email already registered.','error')
+            flash('⚠️ Email already registered.', 'error')
             return redirect(url_for('register'))
         new_user = User(
             email=email,
@@ -95,44 +95,44 @@ def register():
         )
         db.session.add(new_user)
         db.session.commit()
-        flash('✅ Registration successful! Please log in.','success')
+        flash('✅ Registration successful! Please log in.', 'success')
         return redirect(url_for('login'))
     return render_template('register.html')
 
-@app.route('/login', methods=['GET','POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         email = request.form['email']
-        pwd   = request.form['password']
+        pwd = request.form['password']
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password, pwd):
             login_user(user)
             return redirect(url_for('home'))
-        flash('❌ Login failed. Check your credentials.','error')
+        flash('❌ Login failed. Check your credentials.', 'error')
     return render_template('login.html')
 
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
-    flash('👋 Logged out successfully.','success')
+    flash('👋 Logged out successfully.', 'success')
     return redirect(url_for('login'))
 
 # -------------------- Settings --------------------
-@app.route('/settings', methods=['GET','POST'])
+@app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
     if request.method == 'POST':
-        current_user.username         = request.form.get('username', current_user.username)
-        current_user.backup_enabled   = 'backup_enabled' in request.form
-        current_user.dark_mode_enabled= 'dark_mode_enabled' in request.form
+        current_user.username = request.form.get('username', current_user.username)
+        current_user.backup_enabled = 'backup_enabled' in request.form
+        current_user.dark_mode_enabled = 'dark_mode_enabled' in request.form
         db.session.commit()
-        flash('✅ Settings updated.','success')
+        flash('✅ Settings updated.', 'success')
         return redirect(url_for('settings'))
     referral_link = url_for('apply_referral', code=current_user.referral_code, _external=True)
     return render_template('settings.html', referral_link=referral_link)
 
-# -------------------- Plans & Stripe Key -------------------
+# -------------------- Plans & Stripe Key --------------------
 @app.route('/plans')
 @login_required
 def plans():
@@ -160,19 +160,19 @@ def image_processor():
 def video_processor():
     return render_template('video_processor.html')
 
-# -------------------- History & Downloads --------------
+# -------------------- History & Downloads --------------------
 @app.route('/history')
 @login_required
 def history():
-    page = int(request.args.get('page',1))
-    per_page=25
-    hist_folder='static/history'
-    files=sorted(
+    page = int(request.args.get('page', 1))
+    per_page = 25
+    hist_folder = 'static/history'
+    files = sorted(
         os.listdir(hist_folder),
-        key=lambda x: os.path.getmtime(os.path.join(hist_folder,x)),
+        key=lambda x: os.path.getmtime(os.path.join(hist_folder, x)),
         reverse=True
     )
-    total=(len(files)+per_page-1)//per_page
+    total = (len(files) + per_page - 1) // per_page
     return render_template('history.html', files=files[(page-1)*per_page:page*per_page], page=page, total_pages=total)
 
 @app.route('/download/<filename>')
@@ -185,93 +185,8 @@ def download_file(filename):
 def download_zip(filename):
     return send_from_directory('static/processed_zips', filename, as_attachment=True)
 
-# -------------------- Google Drive Backup -------------
+# -------------------- Google Drive Backup --------------------
 def upload_to_google_drive(file_path, filename):
     gauth = GoogleAuth()
     gauth.LoadCredentialsFile("credentials.json")
-    if gauth.credentials is None:
-        gauth.LocalWebserverAuth()
-    elif gauth.access_token_expired:
-        gauth.Refresh()
-    else:
-        gauth.Authorize()
-    gauth.SaveCredentialsFile("credentials.json")
-
-    drive = GoogleDrive(gauth)
-    folder_list = drive.ListFile({'q': "title='MetadataChangerBackup' and mimeType='application/vnd.google-apps.folder' and trashed=false"}).GetList()
-    if folder_list:
-        folder_id = folder_list[0]['id']
-    else:
-        folder = drive.CreateFile({'title':'MetadataChangerBackup', 'mimeType':'application/vnd.google-apps.folder'})
-        folder.Upload()
-        folder_id = folder['id']
-    f = drive.CreateFile({'title':filename,'parents':[{'id':folder_id}]})
-    f.SetContentFile(file_path)
-    f.Upload()
-
-# -------------------- Image Processing ----------
-def scale_range(min_val, max_val, intensity):
-    factor = intensity / 100
-    return random.uniform(min_val * factor, max_val * factor)
-
-@app.route('/process-images', methods=['POST'])
-@login_required
-def process_images():
-    images = request.files.getlist('images')
-    batch = int(request.form.get('batch_size',5))
-    intensity = int(request.form.get('intensity',30))
-    opts = {
-        'contrast': 'adjust_contrast' in request.form,
-        'brightness': 'adjust_brightness' in request.form,
-        'rotate': 'rotate' in request.form,
-        'crop': 'crop' in request.form,
-        'flip': 'flip_horizontal' in request.form
-    }
-    ts = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-    out = os.path.join('processed', ts)
-    os.makedirs(out, exist_ok=True)
-    for img_file in images:
-        img = Image.open(img_file)
-        name = os.path.splitext(img_file.filename)[0]
-        for i in range(batch):
-            var = img.copy()
-            if opts['contrast']:
-                var = ImageEnhance.Contrast(var).enhance(1 + scale_range(-0.1,0.1,intensity))
-            if opts['brightness']:
-                var = ImageEnhance.Brightness(var).enhance(1 + scale_range(-0.1,0.1,intensity))
-            if opts['rotate']:
-                var = var.rotate(scale_range(-5,5,intensity), expand=True)
-            if opts['crop']:
-                w,h = var.size
-                dx,dy = int(w*scale_range(0.01,0.05,intensity)), int(h*scale_range(0.01,0.05,intensity))
-                var = var.crop((dx,dy,w-dx,h-dy))
-            if opts['flip'] and random.random() > 0.5:
-                var = var.transpose(Image.FLIP_LEFT_RIGHT)
-            fn = f"{name}_variant_{i+1}.jpg"
-            var.save(os.path.join(out,fn))
-            var.save(os.path.join('static/history',fn))
-    zip_fn = f"images_{ts}.zip"
-    zp = os.path.join('static/processed_zips', zip_fn)
-    with zipfile.ZipFile(zp,'w') as zf:
-        for f in os.listdir(out): zf.write(os.path.join(out,f), arcname=f)
-    shutil.rmtree(out)
-    if current_user.backup_enabled:
-        upload_to_google_drive(zp, zip_fn)
-    return jsonify({'zip_filename': zip_fn})
-
-# -------------------- OAuth Routes --------------------
-@app.route('/oauth2start')
-@login_required
-def oauth2start():
-    return start_auth()
-
-@app.route('/oauth2callback')
-def oauth2callback():
-    return handle_callback()
-
-# -------------------- Blueprints --------------------
-app.register_blueprint(subscription_bp, url_prefix='/subscription')
-app.register_blueprint(referral_bp,     url_prefix='/referral')
-
-if __name__ == '__main__':
-    app.run(debug=True)
+    if gauth.credentials is None:. `requirements.txt` `requirements.txt`
