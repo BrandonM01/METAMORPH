@@ -289,6 +289,7 @@ def process_videos():
     for vf in vids:
         src = os.path.join('uploads', vf.filename)
         vf.save(src)
+        # probe dimensions
         probe = ffmpeg.probe(src)
         v_stream = next(s for s in probe['streams'] if s['codec_type']=='video')
         w, h = int(v_stream['width']), int(v_stream['height'])
@@ -297,25 +298,26 @@ def process_videos():
         for i in range(batch):
             outp = os.path.join(output_folder, f"{base}_variant_{i+1}.mp4")
             hist = os.path.join('static/history', f"{base}_variant_{i+1}.mp4")
-            st = ffmpeg.input(src)
-
-            # apply filters
+            inp = ffmpeg.input(src)
+            video = inp.video
+            audio = inp.audio
+            # apply filters to video
             if opts['contrast'] or opts['brightness']:
                 c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
                 b = scale_range(-0.05, 0.05, intensity) if opts['brightness'] else 0
-                st = st.filter('eq', contrast=c, brightness=b)
+                video = video.filter('eq', contrast=c, brightness=b)
             if opts['rotate']:
-                st = st.filter('rotate', scale_range(-2, 2, intensity) * 3.1415 / 180)
+                angle = scale_range(-2, 2, intensity) * 3.1415 / 180
+                video = video.filter('rotate', angle)
             if opts['crop']:
                 dx = int(w * scale_range(0.01, 0.03, intensity))
                 dy = int(h * scale_range(0.01, 0.03, intensity))
-                st = st.filter('crop', w - 2*dx, h - 2*dy, dx, dy).filter('scale', w, h)
+                video = video.filter('crop', w - 2*dx, h - 2*dy, dx, dy).filter('scale', w, h)
             if opts['flip'] and random.random() > 0.5:
-                st = st.filter('hflip')
+                video = video.filter('hflip')
 
-                        # copy original audio track to avoid encoder issues
-            stream = ffmpeg.output(st, outp, vcodec='libx264', acodec='copy')
-            # run without capturing so FFmpeg prints errors directly to logs
+            # combine filtered video and original audio
+            stream = ffmpeg.output(video, audio, outp, vcodec='libx264', acodec='copy')
             ffmpeg.run(stream, overwrite_output=True)
 
             shutil.copy(outp, hist)
@@ -331,6 +333,7 @@ def process_videos():
     if current_user.backup_enabled:
         upload_to_google_drive(zip_path, zip_fn)
     return jsonify({'zip_filename': zip_fn})
+
 # -------------------- OAuth Routes --------------------
 @app.route('/oauth2start')
 @login_required
