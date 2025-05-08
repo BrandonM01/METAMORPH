@@ -52,35 +52,60 @@
 </div>
 
 <script>
-document.getElementById('videoForm').addEventListener('submit', function(e) {
+  const form = document.getElementById('videoForm');
+  const spinner = document.getElementById('spinner');
+  const downloadSection = document.getElementById('downloadSection');
+  const downloadLink = document.getElementById('downloadLink');
+  const submitBtn = document.getElementById('submitBtn');
+  const newUploadBtn = document.getElementById('newUploadBtn');
+
+  form.addEventListener('submit', e => {
     e.preventDefault();
-    var formData = new FormData(this);
-    document.getElementById('submitBtn').style.display = 'none';
-    document.getElementById('spinner').style.display = 'block';
+    const formData = new FormData(form);
 
-    fetch('{{ url_for("process_videos") }}', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        document.getElementById('spinner').style.display = 'none';
-        document.getElementById('downloadSection').style.display = 'block';
-        document.getElementById('downloadLink').href = '/download-zip/' + data.zip_filename;
-        document.getElementById('newUploadBtn').style.display = 'inline-block';
-        document.getElementById('downloadSection').scrollIntoView({ behavior: 'smooth' });
-    })
-    .catch(error => {
-        alert('An error occurred!');
-        console.error(error);
-    });
-});
+    // UI state
+    submitBtn.style.display = 'none';
+    spinner.style.display = 'block';
+    downloadSection.style.display = 'none';
+    newUploadBtn.style.display = 'none';
 
-function resetUpload() {
+    fetch(form.action, { method: 'POST', body: formData })
+      .then(resp => resp.json())
+      .then(data => {
+        spinner.style.display = 'none';
+
+        if (data.error) {
+          alert('❌ Video processing failed:\n' + (data.detail || data.error));
+          console.error('Server error:', data);
+          submitBtn.style.display = 'inline-block';
+          return;
+        }
+
+        if (!data.zip_filename) {
+          alert('❌ Unexpected server response. No download link available.');
+          submitBtn.style.display = 'inline-block';
+          return;
+        }
+
+        // success!
+        downloadLink.href = `/download-zip/${data.zip_filename}`;
+        downloadSection.style.display = 'block';
+        newUploadBtn.style.display = 'inline-block';
+        downloadSection.scrollIntoView({ behavior: 'smooth' });
+      })
+      .catch(err => {
+        spinner.style.display = 'none';
+        alert('⚠️ Network error. See console for details.');
+        console.error(err);
+        submitBtn.style.display = 'inline-block';
+      });
+  });
+
+  function resetUpload() {
     document.getElementById('fileInput').value = '';
-    document.getElementById('downloadSection').style.display = 'none';
-    document.getElementById('submitBtn').style.display = 'inline-block';
-    document.getElementById('newUploadBtn').style.display = 'none';
-}
+    downloadSection.style.display = 'none';
+    submitBtn.style.display = 'inline-block';
+    newUploadBtn.style.display = 'none';
+  }
 </script>
 {% endblock %}
