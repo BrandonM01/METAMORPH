@@ -270,7 +270,6 @@ def process_images():
     return jsonify({'zip_filename': zip_fn})
 
 # -------------------- Process Videos ----------
-# -------------------- Process Videos ----------
 @app.route('/process-videos', methods=['POST'])
 @login_required
 def process_videos():
@@ -314,13 +313,14 @@ def process_videos():
                 v = v.filter('eq', contrast=c, brightness=b)
 
             if opts['rotate']:
-                angle = scale_range(-2, 2, intensity) * math.pi/180
-                v = v.filter(
-                    'rotate',
-                    angle=angle,
-                    out_w='iw',        # force output width  = input width
-                    out_h='ih'         # force output height = input height
-                )
+    # rotate by ±θ radians, but keep output width/height = input
+    angle = scale_range(-2, 2, intensity) * math.pi/180
+    v = v.filter(
+        'rotate',
+        angle,
+        out_w='iw',    # output width = input width
+        out_h='ih'     # output height = input height
+    )
 
             if opts['crop']:
                 dx, dy = (
