@@ -269,8 +269,8 @@ def process_images():
 
     return jsonify({'zip_filename': zip_fn})
 
-
 # -------------------- Process Videos ----------
+
 @app.route('/process-videos', methods=['POST'])
 @login_required
 def process_videos():
@@ -293,63 +293,48 @@ def process_videos():
         src = os.path.join('uploads', vf.filename)
         vf.save(src)
 
-        # get streams info
         probe    = ffmpeg.probe(src)
-        streams  = probe['streams']
-        v_stream = next(s for s in streams if s['codec_type']=='video')
-        has_audio = any(s for s in streams if s['codec_type']=='audio')
+        v_stream = next(s for s in probe['streams'] if s['codec_type']=='video')
         w, h     = int(v_stream['width']), int(v_stream['height'])
         base     = os.path.splitext(vf.filename)[0]
 
         video_in = ffmpeg.input(src).video
-        if has_audio:
-            audio_in = ffmpeg.input(src).audio
+        audio_in = ffmpeg.input(src).audio
 
         for i in range(batch):
             outp = os.path.join(output_folder, f"{base}_variant_{i+1}.mp4")
             hist = os.path.join('static/history',   f"{base}_variant_{i+1}.mp4")
 
-            # apply filters to the video stream
             v = video_in
+
+            # contrast & brightness
             if opts['contrast'] or opts['brightness']:
                 c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
                 b =     scale_range(-0.05,0.05,intensity) if opts['brightness'] else 0
                 v = v.filter('eq', contrast=c, brightness=b)
 
+            # rotate ±θ degrees, keep same dimensions
             if opts['rotate']:
                 angle = scale_range(-2, 2, intensity) * math.pi/180
                 v = v.filter(
                     'rotate',
                     angle,
-                    out_w='iw',   # keep original width
-                    out_h='ih'    # keep original height
+                    out_w='iw',    # force output width = input width
+                    out_h='ih',    # force output height = input height
                 )
 
+            # crop & scale back up
             if opts['crop']:
-                dx, dy = (
-                    int(w * scale_range(0.01,0.03,intensity)),
-                    int(h * scale_range(0.01,0.03,intensity))
-                )
+                dx = int(w * scale_range(0.01, 0.03, intensity))
+                dy = int(h * scale_range(0.01, 0.03, intensity))
                 v = v.filter('crop', w-2*dx, h-2*dy, dx, dy).filter('scale', w, h)
 
+            # horizontal flip half the time
             if opts['flip'] and random.random() > 0.5:
                 v = v.filter('hflip')
 
-            # build the output mapping—only include audio if it exists
-            if has_audio:
-                stream = ffmpeg.output(
-                    v, audio_in,
-                    outp,
-                    vcodec='libx264',
-                    acodec='copy'
-                )
-            else:
-                stream = ffmpeg.output(
-                    v,
-                    outp,
-                    vcodec='libx264'
-                )
-
+            # mux video+audio
+            stream = ffmpeg.output(v, audio_in, outp, vcodec='libx264', acodec='copy')
             try:
                 ffmpeg.run(stream, overwrite_output=True, capture_stderr=True)
             except ffmpeg.Error as e:
@@ -364,14 +349,14 @@ def process_videos():
 
         os.remove(src)
 
-    # zip up variants
+    # zip + cleanup
     zip_fn   = f"videos_{ts}.zip"
     zip_path = os.path.join('static/processed_zips', zip_fn)
     with zipfile.ZipFile(zip_path, 'w') as zf:
         for f in os.listdir(output_folder):
             zf.write(os.path.join(output_folder, f), arcname=f)
-
     shutil.rmtree(output_folder)
+
     if current_user.backup_enabled:
         upload_to_google_drive(zip_path, zip_fn)
 
