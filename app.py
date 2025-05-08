@@ -1,6 +1,7 @@
+# app.py
 from dotenv import load_dotenv
 import os
-
+import math
 # Load environment variables
 load_dotenv()
 
@@ -18,11 +19,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
 from PIL import Image, ImageEnhance
-import random
-import zipfile
-import shutil
-import datetime
-import ffmpeg
+import random, zipfile, shutil, datetime, ffmpeg
 
 # Import billing blueprints
 from billing import subscription_bp, referral_bp
@@ -128,20 +125,22 @@ def logout():
 @login_required
 def settings():
     if request.method == 'POST':
-        current_user.username = request.form.get('username', current_user.username)
-        current_user.backup_enabled = 'backup_enabled' in request.form
-        current_user.dark_mode_enabled = 'dark_mode_enabled' in request.form
+        current_user.username         = request.form.get('username', current_user.username)
+        current_user.backup_enabled   = 'backup_enabled' in request.form
+        current_user.dark_mode_enabled= 'dark_mode_enabled' in request.form
         db.session.commit()
         flash('✅ Settings updated.', 'success')
         return redirect(url_for('settings'))
-    referral_link = url_for('apply-referral', code=current_user.referral_code, _external=True)
-    return render_template('settings.html', referral_link=referral_link)
+    link = url_for('apply_referral', code=current_user.referral_code, _external=True)
+    return render_template('settings.html', referral_link=link)
 
 # -------------------- Plans & Stripe Key --------------------
 @app.route('/plans')
 @login_required
 def plans():
-    return render_template('plans.html', stripe_publishable_key=os.getenv('STRIPE_PUBLISHABLE_KEY'))
+    return render_template('plans.html',
+        stripe_publishable_key=os.getenv('STRIPE_PUBLISHABLE_KEY')
+    )
 
 @app.route('/stripe-key')
 @login_required
@@ -151,34 +150,29 @@ def stripe_key():
 # -------------------- UI Pages --------------------
 @app.route('/')
 @login_required
-def home():
-    return render_template('home.html')
-
+def home():            return render_template('home.html')
 @app.route('/image-processor')
 @login_required
-def image_processor():
-    return render_template('image_processor.html')
-
+def image_processor():return render_template('image_processor.html')
 @app.route('/video-processor')
 @login_required
-def video_processor():
-    return render_template('video_processor.html')
+def video_processor():return render_template('video_processor.html')
 
 # -------------------- History & Downloads --------------------
 @app.route('/history')
 @login_required
 def history():
-    page = int(request.args.get('page', 1))
+    page = int(request.args.get('page',1))
     per_page = 25
-    history_folder = 'static/history'
-    all_files = sorted(
-        os.listdir(history_folder),
-        key=lambda x: os.path.getmtime(os.path.join(history_folder, x)),
+    folder = 'static/history'
+    files  = sorted(
+        os.listdir(folder),
+        key=lambda f: os.path.getmtime(os.path.join(folder, f)),
         reverse=True
     )
-    files = all_files[(page-1)*per_page:page*per_page]
-    total_pages = (len(all_files)+per_page-1)//per_page
-    return render_template('history.html', files=files, page=page, total_pages=total_pages)
+    chunk = files[(page-1)*per_page:page*per_page]
+    total = (len(files)+per_page-1)//per_page
+    return render_template('history.html', files=chunk, page=page, total_pages=total)
 
 @app.route('/download/<filename>')
 @login_required
@@ -194,23 +188,29 @@ def download_zip(filename):
 def upload_to_google_drive(file_path, filename):
     gauth = GoogleAuth()
     gauth.LoadCredentialsFile("credentials.json")
-    if gauth.credentials is None:
-        gauth.LocalWebserverAuth()
-    elif gauth.access_token_expired:
-        gauth.Refresh()
-    else:
-        gauth.Authorize()
+    if     gauth.credentials is None: gauth.LocalWebserverAuth()
+    elif   gauth.access_token_expired: gauth.Refresh()
+    else:   gauth.Authorize()
     gauth.SaveCredentialsFile("credentials.json")
 
     drive = GoogleDrive(gauth)
-    folder_list = drive.ListFile({'q': "title='MetadataChangerBackup' and mimeType='application/vnd.google-apps.folder' and trashed=false"}).GetList()
-    if folder_list:
-        folder_id = folder_list[0]['id']
+    fl = drive.ListFile({
+      'q': "title='MetadataChangerBackup' "
+           "and mimeType='application/vnd.google-apps.folder' "
+           "and trashed=false"
+    }).GetList()
+
+    if fl:
+        fid = fl[0]['id']
     else:
-        folder = drive.CreateFile({'title':'MetadataChangerBackup', 'mimeType':'application/vnd.google-apps.folder'})
+        folder = drive.CreateFile({
+          'title':'MetadataChangerBackup',
+          'mimeType':'application/vnd.google-apps.folder'
+        })
         folder.Upload()
-        folder_id = folder['id']
-    f = drive.CreateFile({'title':filename,'parents':[{'id':folder_id}]})
+        fid = folder['id']
+
+    f = drive.CreateFile({'title':filename,'parents':[{'id':fid}]})
     f.SetContentFile(file_path)
     f.Upload()
 
@@ -223,58 +223,9 @@ def scale_range(min_val, max_val, intensity):
 @app.route('/process-images', methods=['POST'])
 @login_required
 def process_images():
-    images = request.files.getlist('images')
-    batch = int(request.form.get('batch_size', 5))
-    intensity = int(request.form.get('intensity', 30))
-    opts = {
-        'contrast': 'adjust_contrast' in request.form,
-        'brightness': 'adjust_brightness' in request.form,
-        'rotate': 'rotate' in request.form,
-        'crop': 'crop' in request.form,
-        'flip': 'flip_horizontal' in request.form
-    }
-    ts = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-    output_folder = os.path.join('processed', ts)
-    os.makedirs(output_folder, exist_ok=True)
-
-    for image_file in images:
-        img = Image.open(image_file)
-        base = os.path.splitext(image_file.filename)[0]
-        for i in range(batch):
-            var = img.copy()
-            if opts['contrast']:
-                var = ImageEnhance.Contrast(var).enhance(1+scale_range(-0.1,0.1,intensity))
-            if opts['brightness']:
-                var = ImageEnhance.Brightness(var).enhance(1+scale_range(-0.1,0.1,intensity))
-            if opts['rotate']:
-                var = var.rotate(scale_range(-5,5,intensity), expand=True)
-            if opts['crop']:
-                w,h = var.size
-                dx,dy = int(w*scale_range(0.01,0.05,intensity)), int(h*scale_range(0.01,0.05,intensity))
-                var = var.crop((dx,dy,w-dx,h-dy))
-            if opts['flip'] and random.random()>0.5:
-                var = var.transpose(Image.FLIP_LEFT_RIGHT)
-            fname = f"{base}_variant_{i+1}.jpg"
-            var.save(os.path.join(output_folder, fname))
-            var.save(os.path.join('static/history', fname))
-
-    zip_fn = f"images_{ts}.zip"
-    zip_path = os.path.join('static/processed_zips', zip_fn)
-    with zipfile.ZipFile(zip_path, 'w') as zf:
-        for f in os.listdir(output_folder):
-            zf.write(os.path.join(output_folder,f), arcname=f)
-    shutil.rmtree(output_folder)
-    if current_user.backup_enabled:
-        upload_to_google_drive(zip_path, zip_fn)
-    return jsonify({'zip_filename': zip_fn})
-
-# -------------------- Process Videos ----------
-@app.route('/process-videos', methods=['POST'])
-@login_required
-def process_videos():
-    vids      = request.files.getlist('videos')
-    batch     = int(request.form.get('batch_size', 5))
-    intensity = int(request.form.get('intensity', 30))
+    images    = request.files.getlist('images')
+    batch     = int(request.form.get('batch_size',5))
+    intensity = int(request.form.get('intensity',30))
     opts = {
         'contrast':   'adjust_contrast'   in request.form,
         'brightness': 'adjust_brightness' in request.form,
@@ -283,44 +234,95 @@ def process_videos():
         'flip':       'flip_horizontal'  in request.form
     }
 
-    ts            = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-    output_folder = os.path.join('processed', ts)
-    os.makedirs(output_folder, exist_ok=True)
+    ts     = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    outdir = os.path.join('processed', ts)
+    os.makedirs(outdir, exist_ok=True)
+
+    for imgf in images:
+        img = Image.open(imgf)
+        base = os.path.splitext(imgf.filename)[0]
+        for i in range(batch):
+            var = img.copy()
+            if opts['contrast']:   var = ImageEnhance.Contrast(var).enhance(1+scale_range(-0.1,0.1,intensity))
+            if opts['brightness']: var = ImageEnhance.Brightness(var).enhance(1+scale_range(-0.1,0.1,intensity))
+            if opts['rotate']:     var = var.rotate(scale_range(-5,5,intensity),expand=True)
+            if opts['crop']:
+                w,h = var.size
+                dx,dy = int(w*scale_range(0.01,0.05,intensity)),int(h*scale_range(0.01,0.05,intensity))
+                var = var.crop((dx,dy,w-dx,h-dy))
+            if opts['flip'] and random.random()>0.5:
+                var = var.transpose(Image.FLIP_LEFT_RIGHT)
+
+            fn = f"{base}_variant_{i+1}.jpg"
+            var.save(os.path.join(outdir, fn))
+            var.save(os.path.join('static/history', fn))
+
+    zip_fn  = f"images_{ts}.zip"
+    zippath = os.path.join('static/processed_zips', zip_fn)
+    with zipfile.ZipFile(zippath, 'w') as zf:
+        for f in os.listdir(outdir):
+            zf.write(os.path.join(outdir, f), arcname=f)
+
+    shutil.rmtree(outdir)
+    if current_user.backup_enabled:
+        upload_to_google_drive(zippath, zip_fn)
+
+    return jsonify({'zip_filename': zip_fn})
+
+# -------------------- Process Videos ----------
+@app.route('/process-videos', methods=['POST'])
+@login_required
+def process_videos():
+    vids      = request.files.getlist('videos')
+    batch     = int(request.form.get('batch_size',5))
+    intensity = int(request.form.get('intensity',30))
+    opts = {
+        'contrast':   'adjust_contrast'   in request.form,
+        'brightness': 'adjust_brightness' in request.form,
+        'rotate':     'rotate'           in request.form,
+        'crop':       'crop'             in request.form,
+        'flip':       'flip_horizontal'  in request.form
+    }
+
+    ts     = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    outdir = os.path.join('processed', ts)
+    os.makedirs(outdir, exist_ok=True)
 
     for vf in vids:
-        # save uploaded file
         src = os.path.join('uploads', vf.filename)
         vf.save(src)
 
-        # probe to get width/height
+        # video + audio inputs
         probe    = ffmpeg.probe(src)
-        v_stream = next(s for s in probe['streams'] if s['codec_type'] == 'video')
-        w, h     = int(v_stream['width']), int(v_stream['height'])
+        vs       = next(s for s in probe['streams'] if s['codec_type']=='video')
+        w, h     = int(vs['width']), int(vs['height'])
         base     = os.path.splitext(vf.filename)[0]
-
-        # pull in both video and audio inputs
         video_in = ffmpeg.input(src).video
         audio_in = ffmpeg.input(src).audio
 
         for i in range(batch):
-            outp = os.path.join(output_folder, f"{base}_variant_{i+1}.mp4")
-            hist = os.path.join('static/history',   f"{base}_variant_{i+1}.mp4")
+            outp = os.path.join(outdir, f"{base}_variant_{i+1}.mp4")
+            hist = os.path.join('static/history', f"{base}_variant_{i+1}.mp4")
 
-            # apply your filters to the video stream
             v = video_in
             if opts['contrast'] or opts['brightness']:
-                c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
+                c = 1 + scale_range(-0.1,0.1,intensity) if opts['contrast'] else 1
                 b =     scale_range(-0.05,0.05,intensity) if opts['brightness'] else 0
                 v = v.filter('eq', contrast=c, brightness=b)
             if opts['rotate']:
-                v = v.filter('rotate', scale_range(-2,2,intensity) * 3.1415/180)
+                angle = scale_range(-2,2,intensity)*math.pi/180
+                v = v.filter(
+                    'rotate',
+                    angle=angle,
+                    ow='rotw(iw,ih)',
+                    oh='roth(iw,ih)'
+                )
             if opts['crop']:
-                dx, dy = int(w*scale_range(0.01,0.03,intensity)), int(h*scale_range(0.01,0.03,intensity))
+                dx,dy = int(w*scale_range(0.01,0.03,intensity)), int(h*scale_range(0.01,0.03,intensity))
                 v = v.filter('crop', w-2*dx, h-2*dy, dx, dy).filter('scale', w, h)
             if opts['flip'] and random.random()>0.5:
                 v = v.filter('hflip')
 
-            # now map both video+audio into the output, copying audio
             stream = ffmpeg.output(
                 v, audio_in,
                 outp,
@@ -330,33 +332,34 @@ def process_videos():
 
             try:
                 ffmpeg.run(
-                    stream,
+                    stream.global_args('-hide_banner','-loglevel','error'),
                     overwrite_output=True,
+                    capture_stdout=True,
                     capture_stderr=True
                 )
             except ffmpeg.Error as e:
-                err = e.stderr.decode('utf-8', errors='ignore')
-                current_app.logger.error(f"FFmpeg failed: {err}")
+                err = (
+                    e.stdout.decode('utf-8','ignore') + "\n" +
+                    e.stderr.decode('utf-8','ignore')
+                )
+                current_app.logger.error("FFmpeg full error:\n" + err)
                 return jsonify({
                     'error':  'Video processing failed',
-                    'detail': err.strip().split('\n')[-1]
+                    'detail': err.strip().splitlines()[-1]
                 }), 500
 
-            # copy into history and loop
             shutil.copy(outp, hist)
-
         os.remove(src)
 
-    # once all variants are done, zip them up
-    zip_fn   = f"videos_{ts}.zip"
-    zip_path = os.path.join('static/processed_zips', zip_fn)
-    with zipfile.ZipFile(zip_path, 'w') as zf:
-        for f in os.listdir(output_folder):
-            zf.write(os.path.join(output_folder, f), arcname=f)
+    zip_fn  = f"videos_{ts}.zip"
+    zippath = os.path.join('static/processed_zips', zip_fn)
+    with zipfile.ZipFile(zippath, 'w') as zf:
+        for f in os.listdir(outdir):
+            zf.write(os.path.join(outdir, f), arcname=f)
 
-    shutil.rmtree(output_folder)
+    shutil.rmtree(outdir)
     if current_user.backup_enabled:
-        upload_to_google_drive(zip_path, zip_fn)
+        upload_to_google_drive(zippath, zip_fn)
 
     return jsonify({'zip_filename': zip_fn})
 
