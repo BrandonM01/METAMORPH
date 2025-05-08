@@ -269,7 +269,7 @@ def process_images():
 
     return jsonify({'zip_filename': zip_fn})
 
-# -------------------- Process Videos (rotate commented out) ----------
+# -------------------- Process Videos (audio‐conditional, rotation commented) ----------
 @app.route('/process-videos', methods=['POST'])
 @login_required
 def process_videos():
@@ -279,7 +279,7 @@ def process_videos():
     opts = {
         'contrast':   'adjust_contrast'   in request.form,
         'brightness': 'adjust_brightness' in request.form,
-        'rotate':     'rotate'            in request.form,  # still read, but not applied
+        'rotate':     'rotate'            in request.form,  # rotation logic is commented out below
         'crop':       'crop'              in request.form,
         'flip':       'flip_horizontal'   in request.form
     }
@@ -292,13 +292,16 @@ def process_videos():
         src = os.path.join('uploads', vf.filename)
         vf.save(src)
 
-        probe    = ffmpeg.probe(src)
-        v_stream = next(s for s in probe['streams'] if s['codec_type'] == 'video')
-        w, h     = int(v_stream['width']), int(v_stream['height'])
-        base     = os.path.splitext(vf.filename)[0]
+        # probe to detect streams
+        probe     = ffmpeg.probe(src)
+        streams   = probe['streams']
+        v_stream  = next(s for s in streams if s['codec_type'] == 'video')
+        has_audio = any(s['codec_type'] == 'audio' for s in streams)
+        w, h      = int(v_stream['width']), int(v_stream['height'])
+        base      = os.path.splitext(vf.filename)[0]
 
         video_in = ffmpeg.input(src).video
-        audio_in = ffmpeg.input(src).audio
+        audio_in = ffmpeg.input(src).audio if has_audio else None
 
         for i in range(batch):
             outp = os.path.join(output_folder, f"{base}_variant_{i+1}.mp4")
@@ -309,10 +312,10 @@ def process_videos():
             # contrast & brightness
             if opts['contrast'] or opts['brightness']:
                 c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
-                b =     scale_range(-0.05, 0.05, intensity) if opts['brightness'] else 0
+                b =     scale_range(-0.05,0.05,intensity) if opts['brightness'] else 0
                 v = v.filter('eq', contrast=c, brightness=b)
 
-            # ── ROTATE FILTER COMMENTED OUT FOR NOW ──
+            # --- ROTATION (temporarily disabled) ---
             # if opts['rotate']:
             #     angle = scale_range(-2, 2, intensity) * math.pi/180
             #     v = v.filter(
@@ -322,23 +325,22 @@ def process_videos():
             #         out_h='ih',
             #     )
 
-            # crop & then scale back to original size
+            # crop & scale back up
             if opts['crop']:
                 dx = int(w * scale_range(0.01, 0.03, intensity))
                 dy = int(h * scale_range(0.01, 0.03, intensity))
                 v = v.filter('crop', w-2*dx, h-2*dy, dx, dy).filter('scale', w, h)
 
-            # horizontal flip 50% of the time
+            # horizontal flip
             if opts['flip'] and random.random() > 0.5:
                 v = v.filter('hflip')
 
-            # mux video + copy audio
-            stream = ffmpeg.output(
-                v, audio_in,
-                outp,
-                vcodec='libx264',
-                acodec='copy'
-            )
+            # mux video+audio only if audio exists
+            if has_audio:
+                stream = ffmpeg.output(v, audio_in, outp, vcodec='libx264', acodec='copy')
+            else:
+                stream = ffmpeg.output(v, outp, vcodec='libx264')
+
             try:
                 ffmpeg.run(stream, overwrite_output=True, capture_stderr=True)
             except ffmpeg.Error as e:
@@ -353,7 +355,7 @@ def process_videos():
 
         os.remove(src)
 
-    # zip up all the variants
+    # zip + cleanup
     zip_fn   = f"videos_{ts}.zip"
     zip_path = os.path.join('static/processed_zips', zip_fn)
     with zipfile.ZipFile(zip_path, 'w') as zf:
@@ -365,6 +367,7 @@ def process_videos():
         upload_to_google_drive(zip_path, zip_fn)
 
     return jsonify({'zip_filename': zip_fn})
+
 # -------------------- OAuth Routes --------------------
 @app.route('/oauth2start')
 @login_required
