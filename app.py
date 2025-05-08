@@ -270,6 +270,8 @@ def process_images():
     return jsonify({'zip_filename': zip_fn})
 
 # -------------------- Process Videos ----------
+
+# -------------------- Process Videos ----------
 @app.route('/process-videos', methods=['POST'])
 @login_required
 def process_videos():
@@ -303,7 +305,7 @@ def process_videos():
 
         for i in range(batch):
             outp = os.path.join(output_folder, f"{base}_variant_{i+1}.mp4")
-            hist = os.path.join('static/history',   f"{base}_variant_{i+1}.mp4")
+            hist = os.path.join('static/history', f"{base}_variant_{i+1}.mp4")
 
             # apply filters to video stream only
             v = video_in
@@ -313,14 +315,14 @@ def process_videos():
                 v = v.filter('eq', contrast=c, brightness=b)
 
             if opts['rotate']:
-    # rotate by ±θ radians, but keep output width/height = input
-    angle = scale_range(-2, 2, intensity) * math.pi/180
-    v = v.filter(
-        'rotate',
-        angle,
-        out_w='iw',    # output width = input width
-        out_h='ih'     # output height = input height
-    )
+                # rotate by ±θ radians, keep output width/height = input
+                angle = scale_range(-2, 2, intensity) * math.pi/180
+                v = v.filter(
+                    'rotate',
+                    angle,
+                    out_w='iw',
+                    out_h='ih'
+                )
 
             if opts['crop']:
                 dx, dy = (
@@ -366,7 +368,6 @@ def process_videos():
         upload_to_google_drive(zip_path, zip_fn)
 
     return jsonify({'zip_filename': zip_fn})
-
 # -------------------- OAuth Routes --------------------
 @app.route('/oauth2start')
 @login_required
