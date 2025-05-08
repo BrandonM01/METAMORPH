@@ -269,7 +269,6 @@ def process_images():
 
     return jsonify({'zip_filename': zip_fn})
 
-# -------------------- Process Videos ----------
 
 # -------------------- Process Videos ----------
 @app.route('/process-videos', methods=['POST'])
@@ -294,20 +293,23 @@ def process_videos():
         src = os.path.join('uploads', vf.filename)
         vf.save(src)
 
-        probe    = ffmpeg.probe(src)
-        v_stream = next(s for s in probe['streams'] if s['codec_type']=='video')
+        # probe to see if there's an audio stream
+        info     = ffmpeg.probe(src)
+        v_stream = next(s for s in info['streams'] if s['codec_type']=='video')
+        has_audio = any(s['codec_type']=='audio' for s in info['streams'])
         w, h     = int(v_stream['width']), int(v_stream['height'])
         base     = os.path.splitext(vf.filename)[0]
 
-        # separate video+audio inputs
+        # separate inputs
         video_in = ffmpeg.input(src).video
-        audio_in = ffmpeg.input(src).audio
+        if has_audio:
+            audio_in = ffmpeg.input(src).audio
 
         for i in range(batch):
             outp = os.path.join(output_folder, f"{base}_variant_{i+1}.mp4")
-            hist = os.path.join('static/history', f"{base}_variant_{i+1}.mp4")
+            hist = os.path.join('static/history',   f"{base}_variant_{i+1}.mp4")
 
-            # apply filters to video stream only
+            # apply filters to video only
             v = video_in
             if opts['contrast'] or opts['brightness']:
                 c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
@@ -315,7 +317,6 @@ def process_videos():
                 v = v.filter('eq', contrast=c, brightness=b)
 
             if opts['rotate']:
-                # rotate by ±θ radians, keep output width/height = input
                 angle = scale_range(-2, 2, intensity) * math.pi/180
                 v = v.filter(
                     'rotate',
@@ -326,21 +327,28 @@ def process_videos():
 
             if opts['crop']:
                 dx, dy = (
-                    int(w * scale_range(0.01, 0.03, intensity)),
-                    int(h * scale_range(0.01, 0.03, intensity))
+                    int(w * scale_range(0.01,0.03,intensity)),
+                    int(h * scale_range(0.01,0.03,intensity))
                 )
                 v = v.filter('crop', w-2*dx, h-2*dy, dx, dy).filter('scale', w, h)
 
-            if opts['flip'] and random.random() > 0.5:
+            if opts['flip'] and random.random()>0.5:
                 v = v.filter('hflip')
 
-            # map video+audio into the output, copy audio
-            stream = ffmpeg.output(
-                v, audio_in,
-                outp,
-                vcodec='libx264',
-                acodec='copy'
-            )
+            # build the ffmpeg.output call differently if there's no audio
+            if has_audio:
+                stream = ffmpeg.output(
+                    v, audio_in,
+                    outp,
+                    vcodec='libx264',
+                    acodec='copy'
+                )
+            else:
+                stream = ffmpeg.output(
+                    v,
+                    outp,
+                    vcodec='libx264'
+                )
 
             try:
                 ffmpeg.run(stream, overwrite_output=True, capture_stderr=True)
@@ -356,7 +364,7 @@ def process_videos():
 
         os.remove(src)
 
-    # zip up variants
+    # zip up all variants
     zip_fn   = f"videos_{ts}.zip"
     zip_path = os.path.join('static/processed_zips', zip_fn)
     with zipfile.ZipFile(zip_path, 'w') as zf:
