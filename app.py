@@ -298,6 +298,8 @@ def process_videos():
             outp = os.path.join(output_folder, f"{base}_variant_{i+1}.mp4")
             hist = os.path.join('static/history', f"{base}_variant_{i+1}.mp4")
             st = ffmpeg.input(src)
+
+            # apply filters
             if opts['contrast'] or opts['brightness']:
                 c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
                 b = scale_range(-0.05, 0.05, intensity) if opts['brightness'] else 0
@@ -311,20 +313,19 @@ def process_videos():
             if opts['flip'] and random.random() > 0.5:
                 st = st.filter('hflip')
 
-            # copy audio & capture stderr for diagnostics
+            # copy original audio track to avoid encoder issues
             stream = ffmpeg.output(st, outp, vcodec='libx264', acodec='copy')
             try:
-                ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
+                ffmpeg.run(stream, overwrite_output=True, capture_stderr=True)
             except ffmpeg.Error as e:
                 err = e.stderr.decode('utf-8', errors='ignore')
-                out = e.stdout.decode('utf-8', errors='ignore')
-                current_app.logger.error(f"FFmpeg stderr: {err}")
-                current_app.logger.error(f"FFmpeg stdout: {out}")
+                current_app.logger.error(f"FFmpeg error: {err}")
                 return jsonify({'error': 'Video processing failed', 'detail': err}), 500
 
             shutil.copy(outp, hist)
         os.remove(src)
 
+    # package variants into zip
     zip_fn = f"videos_{ts}.zip"
     zip_path = os.path.join('static/processed_zips', zip_fn)
     with zipfile.ZipFile(zip_path, 'w') as zf:
@@ -334,7 +335,6 @@ def process_videos():
     if current_user.backup_enabled:
         upload_to_google_drive(zip_path, zip_fn)
     return jsonify({'zip_filename': zip_fn})
-
 
 # -------------------- OAuth Routes --------------------
 @app.route('/oauth2start')
