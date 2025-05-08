@@ -269,8 +269,7 @@ def process_images():
 
     return jsonify({'zip_filename': zip_fn})
 
-# -------------------- Process Videos ----------
-
+# -------------------- Process Videos (rotate commented out) ----------
 @app.route('/process-videos', methods=['POST'])
 @login_required
 def process_videos():
@@ -280,7 +279,7 @@ def process_videos():
     opts = {
         'contrast':   'adjust_contrast'   in request.form,
         'brightness': 'adjust_brightness' in request.form,
-        'rotate':     'rotate'            in request.form,
+        'rotate':     'rotate'            in request.form,  # still read, but not applied
         'crop':       'crop'              in request.form,
         'flip':       'flip_horizontal'   in request.form
     }
@@ -294,7 +293,7 @@ def process_videos():
         vf.save(src)
 
         probe    = ffmpeg.probe(src)
-        v_stream = next(s for s in probe['streams'] if s['codec_type']=='video')
+        v_stream = next(s for s in probe['streams'] if s['codec_type'] == 'video')
         w, h     = int(v_stream['width']), int(v_stream['height'])
         base     = os.path.splitext(vf.filename)[0]
 
@@ -310,31 +309,36 @@ def process_videos():
             # contrast & brightness
             if opts['contrast'] or opts['brightness']:
                 c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
-                b =     scale_range(-0.05,0.05,intensity) if opts['brightness'] else 0
+                b =     scale_range(-0.05, 0.05, intensity) if opts['brightness'] else 0
                 v = v.filter('eq', contrast=c, brightness=b)
 
-            # rotate ±θ degrees, keep same dimensions
-            if opts['rotate']:
-                angle = scale_range(-2, 2, intensity) * math.pi/180
-                v = v.filter(
-                    'rotate',
-                    angle,
-                    out_w='iw',    # force output width = input width
-                    out_h='ih',    # force output height = input height
-                )
+            # ── ROTATE FILTER COMMENTED OUT FOR NOW ──
+            # if opts['rotate']:
+            #     angle = scale_range(-2, 2, intensity) * math.pi/180
+            #     v = v.filter(
+            #         'rotate',
+            #         angle,
+            #         out_w='iw',
+            #         out_h='ih',
+            #     )
 
-            # crop & scale back up
+            # crop & then scale back to original size
             if opts['crop']:
                 dx = int(w * scale_range(0.01, 0.03, intensity))
                 dy = int(h * scale_range(0.01, 0.03, intensity))
                 v = v.filter('crop', w-2*dx, h-2*dy, dx, dy).filter('scale', w, h)
 
-            # horizontal flip half the time
+            # horizontal flip 50% of the time
             if opts['flip'] and random.random() > 0.5:
                 v = v.filter('hflip')
 
-            # mux video+audio
-            stream = ffmpeg.output(v, audio_in, outp, vcodec='libx264', acodec='copy')
+            # mux video + copy audio
+            stream = ffmpeg.output(
+                v, audio_in,
+                outp,
+                vcodec='libx264',
+                acodec='copy'
+            )
             try:
                 ffmpeg.run(stream, overwrite_output=True, capture_stderr=True)
             except ffmpeg.Error as e:
@@ -349,7 +353,7 @@ def process_videos():
 
         os.remove(src)
 
-    # zip + cleanup
+    # zip up all the variants
     zip_fn   = f"videos_{ts}.zip"
     zip_path = os.path.join('static/processed_zips', zip_fn)
     with zipfile.ZipFile(zip_path, 'w') as zf:
