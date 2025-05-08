@@ -291,32 +291,36 @@ def process_videos():
         vf.save(src)
         probe = ffmpeg.probe(src)
         v_stream = next(s for s in probe['streams'] if s['codec_type']=='video')
-        w,h = int(v_stream['width']), int(v_stream['height'])
+        w, h = int(v_stream['width']), int(v_stream['height'])
         base = os.path.splitext(vf.filename)[0]
+
         for i in range(batch):
             outp = os.path.join(output_folder, f"{base}_variant_{i+1}.mp4")
             hist = os.path.join('static/history', f"{base}_variant_{i+1}.mp4")
             st = ffmpeg.input(src)
             if opts['contrast'] or opts['brightness']:
-                c = 1+scale_range(-0.1,0.1,intensity) if opts['contrast'] else 1
-                b = scale_range(-0.05,0.05,intensity) if opts['brightness'] else 0
-                st = st.filter('eq',contrast=c,brightness=b)
+                c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
+                b = scale_range(-0.05, 0.05, intensity) if opts['brightness'] else 0
+                st = st.filter('eq', contrast=c, brightness=b)
             if opts['rotate']:
-                st = st.filter('rotate', scale_range(-2,2,intensity)*3.1415/180)
+                st = st.filter('rotate', scale_range(-2, 2, intensity) * 3.1415 / 180)
             if opts['crop']:
-                dx,dy = int(w*scale_range(0.01,0.03,intensity)), int(h*scale_range(0.01,0.03,intensity))
-                st = st.filter('crop', w-2*dx, h-2*dy, dx, dy).filter('scale', w, h)
-            if opts['flip'] and random.random()>0.5:
+                dx = int(w * scale_range(0.01, 0.03, intensity))
+                dy = int(h * scale_range(0.01, 0.03, intensity))
+                st = st.filter('crop', w - 2*dx, h - 2*dy, dx, dy).filter('scale', w, h)
+            if opts['flip'] and random.random() > 0.5:
                 st = st.filter('hflip')
 
             # copy audio & capture stderr for diagnostics
             stream = ffmpeg.output(st, outp, vcodec='libx264', acodec='copy')
             try:
-                ffmpeg.run(stream, overwrite_output=True, capture_stderr=True)
+                ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
             except ffmpeg.Error as e:
                 err = e.stderr.decode('utf-8', errors='ignore')
-                current_app.logger.error(f"FFmpeg failed: {err}")
-                return jsonify({'error':'Video processing failed','detail':err}), 500
+                out = e.stdout.decode('utf-8', errors='ignore')
+                current_app.logger.error(f"FFmpeg stderr: {err}")
+                current_app.logger.error(f"FFmpeg stdout: {out}")
+                return jsonify({'error': 'Video processing failed', 'detail': err}), 500
 
             shutil.copy(outp, hist)
         os.remove(src)
@@ -324,12 +328,13 @@ def process_videos():
     zip_fn = f"videos_{ts}.zip"
     zip_path = os.path.join('static/processed_zips', zip_fn)
     with zipfile.ZipFile(zip_path, 'w') as zf:
-        for f in os.listdir(output_folder):
-            zf.write(os.path.join(output_folder,f), arcname=f)
+        for fname in os.listdir(output_folder):
+            zf.write(os.path.join(output_folder, fname), arcname=fname)
     shutil.rmtree(output_folder)
     if current_user.backup_enabled:
         upload_to_google_drive(zip_path, zip_fn)
     return jsonify({'zip_filename': zip_fn})
+
 
 # -------------------- OAuth Routes --------------------
 @app.route('/oauth2start')
