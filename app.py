@@ -269,82 +269,95 @@ def process_images():
     return jsonify({'zip_filename': zip_fn})
 
 # -------------------- Process Videos ----------
-import subprocess
-
 @app.route('/process-videos', methods=['POST'])
 @login_required
 def process_videos():
-    vids = request.files.getlist('videos')
-    batch = int(request.form.get('batch_size', 5))
+    vids      = request.files.getlist('videos')
+    batch     = int(request.form.get('batch_size', 5))
     intensity = int(request.form.get('intensity', 30))
     opts = {
-        'contrast': 'adjust_contrast' in request.form,
+        'contrast':   'adjust_contrast'   in request.form,
         'brightness': 'adjust_brightness' in request.form,
-        'rotate': 'rotate' in request.form,
-        'crop': 'crop' in request.form,
-        'flip': 'flip_horizontal' in request.form
+        'rotate':     'rotate'           in request.form,
+        'crop':       'crop'             in request.form,
+        'flip':       'flip_horizontal'  in request.form
     }
-    ts = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+
+    ts            = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     output_folder = os.path.join('processed', ts)
     os.makedirs(output_folder, exist_ok=True)
 
     for vf in vids:
+        # save uploaded file
         src = os.path.join('uploads', vf.filename)
         vf.save(src)
-        # probe dimensions
-        probe = ffmpeg.probe(src)
-        v_stream = next(s for s in probe['streams'] if s['codec_type']=='video')
-        w, h = int(v_stream['width']), int(v_stream['height'])
-        base = os.path.splitext(vf.filename)[0]
+
+        # probe to get width/height
+        probe    = ffmpeg.probe(src)
+        v_stream = next(s for s in probe['streams'] if s['codec_type'] == 'video')
+        w, h     = int(v_stream['width']), int(v_stream['height'])
+        base     = os.path.splitext(vf.filename)[0]
+
+        # pull in both video and audio inputs
+        video_in = ffmpeg.input(src).video
+        audio_in = ffmpeg.input(src).audio
 
         for i in range(batch):
             outp = os.path.join(output_folder, f"{base}_variant_{i+1}.mp4")
-            hist = os.path.join('static/history', f"{base}_variant_{i+1}.mp4")
+            hist = os.path.join('static/history',   f"{base}_variant_{i+1}.mp4")
 
-            # build FFmpeg filter chain
-            filters = []
+            # apply your filters to the video stream
+            v = video_in
             if opts['contrast'] or opts['brightness']:
                 c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
-                b = scale_range(-0.05, 0.05, intensity) if opts['brightness'] else 0
-                filters.append(f"eq=contrast={c}:brightness={b}")
+                b =     scale_range(-0.05,0.05,intensity) if opts['brightness'] else 0
+                v = v.filter('eq', contrast=c, brightness=b)
             if opts['rotate']:
-                angle = scale_range(-2, 2, intensity)
-                filters.append(f"rotate={angle}*PI/180")
+                v = v.filter('rotate', scale_range(-2,2,intensity) * 3.1415/180)
             if opts['crop']:
-                dx = int(w * scale_range(0.01, 0.03, intensity))
-                dy = int(h * scale_range(0.01, 0.03, intensity))
-                filters.append(f"crop={w-2*dx}:{h-2*dy}:{dx}:{dy}")
-            if opts['flip'] and random.random() > 0.5:
-                filters.append("hflip")
+                dx, dy = int(w*scale_range(0.01,0.03,intensity)), int(h*scale_range(0.01,0.03,intensity))
+                v = v.filter('crop', w-2*dx, h-2*dy, dx, dy).filter('scale', w, h)
+            if opts['flip'] and random.random()>0.5:
+                v = v.filter('hflip')
 
-            cmd = ['ffmpeg', '-y', '-i', src]
-            if filters:
-                cmd += ['-vf', ','.join(filters)]
-            cmd += ['-c:v', 'libx264', '-c:a', 'copy', outp]
+            # now map both video+audio into the output, copying audio
+            stream = ffmpeg.output(
+                v, audio_in,
+                outp,
+                vcodec='libx264',
+                acodec='copy'
+            )
 
             try:
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    check=True
+                ffmpeg.run(
+                    stream,
+                    overwrite_output=True,
+                    capture_stderr=True
                 )
-            except subprocess.CalledProcessError as e:
-                current_app.logger.error(f"FFmpeg stderr: {e.stderr}")
-                return jsonify({'error': 'Video processing failed', 'detail': e.stderr}), 500
+            except ffmpeg.Error as e:
+                err = e.stderr.decode('utf-8', errors='ignore')
+                current_app.logger.error(f"FFmpeg failed: {err}")
+                return jsonify({
+                    'error':  'Video processing failed',
+                    'detail': err.strip().split('\n')[-1]
+                }), 500
 
+            # copy into history and loop
             shutil.copy(outp, hist)
+
         os.remove(src)
 
-    # package variants into zip
-    zip_fn = f"videos_{ts}.zip"
+    # once all variants are done, zip them up
+    zip_fn   = f"videos_{ts}.zip"
     zip_path = os.path.join('static/processed_zips', zip_fn)
     with zipfile.ZipFile(zip_path, 'w') as zf:
-        for fname in os.listdir(output_folder):
-            zf.write(os.path.join(output_folder, fname), arcname=fname)
+        for f in os.listdir(output_folder):
+            zf.write(os.path.join(output_folder, f), arcname=f)
+
     shutil.rmtree(output_folder)
     if current_user.backup_enabled:
         upload_to_google_drive(zip_path, zip_fn)
+
     return jsonify({'zip_filename': zip_fn})
 
 # -------------------- OAuth Routes --------------------
