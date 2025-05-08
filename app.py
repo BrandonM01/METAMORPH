@@ -269,6 +269,8 @@ def process_images():
     return jsonify({'zip_filename': zip_fn})
 
 # -------------------- Process Videos ----------
+import subprocess
+
 @app.route('/process-videos', methods=['POST'])
 @login_required
 def process_videos():
@@ -298,27 +300,38 @@ def process_videos():
         for i in range(batch):
             outp = os.path.join(output_folder, f"{base}_variant_{i+1}.mp4")
             hist = os.path.join('static/history', f"{base}_variant_{i+1}.mp4")
-            inp = ffmpeg.input(src)
-            video = inp.video
-            audio = inp.audio
-            # apply filters to video
+
+            # build FFmpeg filter chain
+            filters = []
             if opts['contrast'] or opts['brightness']:
                 c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
                 b = scale_range(-0.05, 0.05, intensity) if opts['brightness'] else 0
-                video = video.filter('eq', contrast=c, brightness=b)
+                filters.append(f"eq=contrast={c}:brightness={b}")
             if opts['rotate']:
-                angle = scale_range(-2, 2, intensity) * 3.1415 / 180
-                video = video.filter('rotate', angle)
+                angle = scale_range(-2, 2, intensity)
+                filters.append(f"rotate={angle}*PI/180")
             if opts['crop']:
                 dx = int(w * scale_range(0.01, 0.03, intensity))
                 dy = int(h * scale_range(0.01, 0.03, intensity))
-                video = video.filter('crop', w - 2*dx, h - 2*dy, dx, dy).filter('scale', w, h)
+                filters.append(f"crop={w-2*dx}:{h-2*dy}:{dx}:{dy}")
             if opts['flip'] and random.random() > 0.5:
-                video = video.filter('hflip')
+                filters.append("hflip")
 
-            # combine filtered video and original audio
-            stream = ffmpeg.output(video, audio, outp, vcodec='libx264', acodec='copy')
-            ffmpeg.run(stream, overwrite_output=True)
+            cmd = ['ffmpeg', '-y', '-i', src]
+            if filters:
+                cmd += ['-vf', ','.join(filters)]
+            cmd += ['-c:v', 'libx264', '-c:a', 'copy', outp]
+
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+            except subprocess.CalledProcessError as e:
+                current_app.logger.error(f"FFmpeg stderr: {e.stderr}")
+                return jsonify({'error': 'Video processing failed', 'detail': e.stderr}), 500
 
             shutil.copy(outp, hist)
         os.remove(src)
