@@ -269,7 +269,7 @@ def process_images():
 
     return jsonify({'zip_filename': zip_fn})
 
-# -------------------- Process Videos (audio‐conditional, rotation commented) ----------
+# -------------------- Process Videos (rotation commented out) ----------
 @app.route('/process-videos', methods=['POST'])
 @login_required
 def process_videos():
@@ -279,7 +279,7 @@ def process_videos():
     opts = {
         'contrast':   'adjust_contrast'   in request.form,
         'brightness': 'adjust_brightness' in request.form,
-        'rotate':     'rotate'            in request.form,  # rotation logic is commented out below
+        'rotate':     'rotate'            in request.form,  # rotation code commented below
         'crop':       'crop'              in request.form,
         'flip':       'flip_horizontal'   in request.form
     }
@@ -306,13 +306,12 @@ def process_videos():
         for i in range(batch):
             outp = os.path.join(output_folder, f"{base}_variant_{i+1}.mp4")
             hist = os.path.join('static/history',   f"{base}_variant_{i+1}.mp4")
-
             v = video_in
 
             # contrast & brightness
             if opts['contrast'] or opts['brightness']:
                 c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
-                b =     scale_range(-0.05,0.05,intensity) if opts['brightness'] else 0
+                b =     scale_range(-0.05, 0.05, intensity) if opts['brightness'] else 0
                 v = v.filter('eq', contrast=c, brightness=b)
 
             # --- ROTATION (temporarily disabled) ---
@@ -367,6 +366,22 @@ def process_videos():
         upload_to_google_drive(zip_path, zip_fn)
 
     return jsonify({'zip_filename': zip_fn})
+
+# -------------------- OAuth Routes & Blueprints --------------------
+@app.route('/oauth2start')
+@login_required
+def oauth2start():
+    return start_auth()
+
+@app.route('/oauth2callback')
+def oauth2callback():
+    return handle_callback()
+
+app.register_blueprint(subscription_bp, url_prefix='/subscription')
+app.register_blueprint(referral_bp,     url_prefix='/referral')
+
+if __name__ == '__main__':
+    app.run(debug=True)
 
 # -------------------- OAuth Routes --------------------
 @app.route('/oauth2start')
