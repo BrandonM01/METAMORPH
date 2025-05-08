@@ -313,14 +313,10 @@ def process_videos():
             if opts['flip'] and random.random() > 0.5:
                 st = st.filter('hflip')
 
-            # copy original audio track to avoid encoder issues
+                        # copy original audio track to avoid encoder issues
             stream = ffmpeg.output(st, outp, vcodec='libx264', acodec='copy')
-            try:
-                ffmpeg.run(stream, overwrite_output=True, capture_stderr=True)
-            except ffmpeg.Error as e:
-                err = e.stderr.decode('utf-8', errors='ignore')
-                current_app.logger.error(f"FFmpeg error: {err}")
-                return jsonify({'error': 'Video processing failed', 'detail': err}), 500
+            # run without capturing so FFmpeg prints errors directly to logs
+            ffmpeg.run(stream, overwrite_output=True)
 
             shutil.copy(outp, hist)
         os.remove(src)
@@ -335,7 +331,6 @@ def process_videos():
     if current_user.backup_enabled:
         upload_to_google_drive(zip_path, zip_fn)
     return jsonify({'zip_filename': zip_fn})
-
 # -------------------- OAuth Routes --------------------
 @app.route('/oauth2start')
 @login_required
