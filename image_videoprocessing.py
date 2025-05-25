@@ -5,6 +5,7 @@ import zipfile
 import datetime
 from PIL import Image, ImageEnhance
 import ffmpeg
+import sys
 
 def scale_range(min_val, max_val, intensity):
     return random.uniform(min_val * (intensity / 100), max_val * (intensity / 100))
@@ -60,7 +61,7 @@ def process_videos_logic(vids, batch, intensity, opts, out, hist_folder):
                     overwrite_output=True
                 )
             except ffmpeg.Error as e:
-                print("ffmpeg error:", e.stderr.decode() if e.stderr else e)
+                print("ffmpeg error:", e.stderr.decode() if e.stderr else e, file=sys.stderr)
                 raise
             shutil.copy(outp, hist)
         os.remove(src)
