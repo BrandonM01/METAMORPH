@@ -61,7 +61,8 @@ def process_videos_logic(vids, batch, intensity, opts, out, hist_folder):
                     overwrite_output=True
                 )
             except ffmpeg.Error as e:
-                print("ffmpeg error:", e.stderr.decode() if e.stderr else e, file=sys.stderr)
-                raise
+    print("ffmpeg stdout:\n", e.stdout.decode() if e.stdout else e.stdout, file=sys.stderr)
+    print("ffmpeg stderr:\n", e.stderr.decode() if e.stderr else e.stderr, file=sys.stderr)
+    raise
             shutil.copy(outp, hist)
         os.remove(src)
