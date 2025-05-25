@@ -29,8 +29,9 @@ def process_images_logic(images, batch, intensity, opts, out, hist_folder):
             if opts['flip'] and random.random() > 0.5:
                 var = var.transpose(Image.FLIP_LEFT_RIGHT)
             fn = f"{name}_variant_{i+1}.jpg"
-            var.save(os.path.join(out, fn))
-            var.save(os.path.join(hist_folder, fn))
+            var_rgb = var.convert("RGB")
+            var_rgb.save(os.path.join(out, fn))
+            var_rgb.save(os.path.join(hist_folder, fn))
 
 def process_videos_logic(vids, batch, intensity, opts, out, hist_folder):
     for vf in vids:
