@@ -55,12 +55,12 @@ def process_videos_logic(vids, batch, intensity, opts, out, hist_folder):
                 st = st.filter('crop', w - 2 * dx, h - 2 * dy, dx, dy).filter('scale', w, h)
             if opts['flip'] and random.random() > 0.5:
                 st = st.filter('hflip')
-            try:
-                ffmpeg.run(
-                    ffmpeg.output(st, outp, vcodec='libx264', acodec='aac'),
-                    overwrite_output=True
-                )
-            except ffmpeg.Error as e:
+try:
+    ffmpeg.run(
+        ffmpeg.output(st, outp, vcodec='libx264', acodec='aac'),
+        overwrite_output=True
+    )
+except ffmpeg.Error as e:
     print("ffmpeg stdout:\n", e.stdout.decode() if e.stdout else e.stdout, file=sys.stderr)
     print("ffmpeg stderr:\n", e.stderr.decode() if e.stderr else e.stderr, file=sys.stderr)
     raise
