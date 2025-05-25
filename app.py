@@ -16,13 +16,15 @@ from flask_login import (
 from werkzeug.security import generate_password_hash, check_password_hash
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
-from PIL import Image, ImageEnhance
-import random, zipfile, shutil, datetime, ffmpeg
+import random, zipfile, shutil, datetime
 
 # Import billing blueprints
 from billing import subscription_bp, referral_bp
 # Import Google OAuth helpers
 from google_drive import start_auth, handle_callback
+
+# Import new processing logic
+from image_videoprocessing import process_images_logic, process_videos_logic
 
 # -------------------- App & DB Setup --------------------
 app = Flask(__name__)
@@ -204,85 +206,53 @@ def upload_to_google_drive(file_path, filename):
     f.Upload()
 
 # -------------------- Image/Video Processing ----------
-def scale_range(min_val,max_val,intensity): return random.uniform(min_val*(intensity/100), max_val*(intensity/100))
-
 @app.route('/process-images', methods=['POST'])
 @login_required
 def process_images():
-    images=request.files.getlist('images')
-    batch=int(request.form.get('batch_size',5))
-    intensity=int(request.form.get('intensity',30))
-    opts={
-        'contrast':'adjust_contrast' in request.form,
-        'brightness':'adjust_brightness' in request.form,
-        'rotate':'rotate' in request.form,
-        'crop':'crop' in request.form,
-        'flip':'flip_horizontal' in request.form
+    images = request.files.getlist('images')
+    batch = int(request.form.get('batch_size', 5))
+    intensity = int(request.form.get('intensity', 30))
+    opts = {
+        'contrast': 'adjust_contrast' in request.form,
+        'brightness': 'adjust_brightness' in request.form,
+        'rotate': 'rotate' in request.form,
+        'crop': 'crop' in request.form,
+        'flip': 'flip_horizontal' in request.form
     }
-    ts=datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-    out=os.path.join('processed',ts);os.makedirs(out,exist_ok=True)
-    for img_file in images:
-        img=Image.open(img_file)
-        name=os.path.splitext(img_file.filename)[0]
-        for i in range(batch):
-            var=img.copy()
-            if opts['contrast']: var=ImageEnhance.Contrast(var).enhance(1+scale_range(-0.1,0.1,intensity))
-            if opts['brightness']: var=ImageEnhance.Brightness(var).enhance(1+scale_range(-0.1,0.1,intensity))
-            if opts['rotate']: var=var.rotate(scale_range(-5,5,intensity),expand=True)
-            if opts['crop']:
-                w,h=var.size;dx,dy=int(w*scale_range(0.01,0.05,intensity)),int(h*scale_range(0.01,0.05,intensity))
-                var=var.crop((dx,dy,w-dx,h-dy))
-            if opts['flip'] and random.random()>0.5: var=var.transpose(Image.FLIP_LEFT_RIGHT)
-            fn=f"{name}_variant_{i+1}.jpg";var.save(os.path.join(out,fn));var.save(os.path.join('static/history',fn))
-    zip_fn=f"images_{ts}.zip";zp=os.path.join('static/processed_zips',zip_fn)
+    ts = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    out = os.path.join('processed', ts); os.makedirs(out, exist_ok=True)
+    hist_folder = 'static/history'
+    process_images_logic(images, batch, intensity, opts, out, hist_folder)
+    zip_fn = f"images_{ts}.zip"; zp = os.path.join('static/processed_zips', zip_fn)
     with zipfile.ZipFile(zp,'w') as zf:
-        for f in os.listdir(out): zf.write(os.path.join(out,f),arcname=f)
+        for f in os.listdir(out): zf.write(os.path.join(out, f), arcname=f)
     shutil.rmtree(out)
-    if current_user.backup_enabled: upload_to_google_drive(zp,zip_fn)
-    return jsonify({'zip_filename':zip_fn})
+    if current_user.backup_enabled: upload_to_google_drive(zp, zip_fn)
+    return jsonify({'zip_filename': zip_fn})
 
-@app.route('/process-videos',methods=['POST'])
+@app.route('/process-videos', methods=['POST'])
 @login_required
 def process_videos():
-    vids=request.files.getlist('videos')
-    batch=int(request.form.get('batch_size',5))
-    intensity=int(request.form.get('intensity',30))
-    opts={
-        'contrast':'adjust_contrast' in request.form,
-        'brightness':'adjust_brightness' in request.form,
-        'rotate':'rotate' in request.form,
-        'crop':'crop' in request.form,
-        'flip':'flip_horizontal' in request.form
+    vids = request.files.getlist('videos')
+    batch = int(request.form.get('batch_size', 5))
+    intensity = int(request.form.get('intensity', 30))
+    opts = {
+        'contrast': 'adjust_contrast' in request.form,
+        'brightness': 'adjust_brightness' in request.form,
+        'rotate': 'rotate' in request.form,
+        'crop': 'crop' in request.form,
+        'flip': 'flip_horizontal' in request.form
     }
-    ts=datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-    out=os.path.join('processed',ts);os.makedirs(out,exist_ok=True)
-    for vf in vids:
-        src=os.path.join('uploads',vf.filename);vf.save(src)
-        probe=ffmpeg.probe(src);
-        vs=next(s for s in probe['streams'] if s['codec_type']=='video')
-        w,h=int(vs['width']),int(vs['height']);name=os.path.splitext(vf.filename)[0]
-        for i in range(batch):
-            outp=os.path.join(out,f"{name}_variant_{i+1}.mp4")
-            hist=os.path.join('static/history',f"{name}_variant_{i+1}.mp4")
-            st=ffmpeg.input(src)
-            if opts['contrast'] or opts['brightness']:
-                c=1+scale_range(-0.1,0.1,intensity) if opts['contrast'] else 1
-                b=scale_range(-0.05,0.05,intensity) if opts['brightness'] else 0
-                st=st.filter('eq',contrast=c,brightness=b)
-            if opts['rotate']: st=st.filter('rotate',scale_range(-2,2,intensity)*3.1415/180)
-            if opts['crop']:
-                dx,dy=int(w*scale_range(0.01,0.03,intensity)),int(h*scale_range(0.01,0.03,intensity));
-                st=st.filter('crop',w-2*dx,h-2*dy,dx,dy).filter('scale',w,h)
-            if opts['flip'] and random.random()>0.5: st=st.filter('hflip')
-            ffmpeg.run(ffmpeg.output(st,outp,vcodec='libx264',acodec='aac'),overwrite_output=True)
-            shutil.copy(outp,hist)
-        os.remove(src)
-    zip_fn=f"videos_{ts}.zip";zp=os.path.join('static/processed_zips',zip_fn)
+    ts = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    out = os.path.join('processed', ts); os.makedirs(out, exist_ok=True)
+    hist_folder = 'static/history'
+    process_videos_logic(vids, batch, intensity, opts, out, hist_folder)
+    zip_fn = f"videos_{ts}.zip"; zp = os.path.join('static/processed_zips', zip_fn)
     with zipfile.ZipFile(zp,'w') as zf:
-        for f in os.listdir(out): zf.write(os.path.join(out,f),arcname=f)
+        for f in os.listdir(out): zf.write(os.path.join(out, f), arcname=f)
     shutil.rmtree(out)
-    if current_user.backup_enabled: upload_to_google_drive(zp,zip_fn)
-    return jsonify({'zip_filename':zip_fn})
+    if current_user.backup_enabled: upload_to_google_drive(zp, zip_fn)
+    return jsonify({'zip_filename': zip_fn})
 
 # -------------------- OAuth Routes --------------------
 @app.route('/oauth2start')
