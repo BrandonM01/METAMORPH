@@ -45,22 +45,22 @@ def process_videos_logic(vids, batch, intensity, opts, out, hist_folder):
             st = ffmpeg.input(src)
             # Build filter chain step by step
             filter_chain = []
-            if opts['contrast'] or opts['brightness']:
-                c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
-                b = scale_range(-0.05, 0.05, intensity) if opts['brightness'] else 0
-                print(f"Applying eq filter with contrast={c}, brightness={b}", file=sys.stderr)
-                st = st.filter('eq', contrast=c, brightness=b)
+         #   if opts['contrast'] or opts['brightness']:
+         #       c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
+         #       b = scale_range(-0.05, 0.05, intensity) if opts['brightness'] else 0
+         #       print(f"Applying eq filter with contrast={c}, brightness={b}", file=sys.stderr)
+         #       st = st.filter('eq', contrast=c, brightness=b)
         #    if opts['rotate']:
         #       angle_rads = scale_range(-2, 2, intensity) * 3.1415 / 180
         #       print(f"Applying rotate filter with angle (rads): {angle_rads}", file=sys.stderr)
         #      st = st.filter('rotate', angle_rads)
-            if opts['crop']:
-                dx, dy = int(w * scale_range(0.01, 0.03, intensity)), int(h * scale_range(0.01, 0.03, intensity))
-                print(f"Applying crop filter: dx={dx}, dy={dy}", file=sys.stderr)
-                st = st.filter('crop', w - 2 * dx, h - 2 * dy, dx, dy).filter('scale', w, h)
-            if opts['flip'] and random.random() > 0.5:
-                print("Applying hflip filter", file=sys.stderr)
-                st = st.filter('hflip')
+        #    if opts['crop']:
+        #        dx, dy = int(w * scale_range(0.01, 0.03, intensity)), int(h * scale_range(0.01, 0.03, intensity))
+        #        print(f"Applying crop filter: dx={dx}, dy={dy}", file=sys.stderr)
+        #        st = st.filter('crop', w - 2 * dx, h - 2 * dy, dx, dy).filter('scale', w, h)
+        #    if opts['flip'] and random.random() > 0.5:
+        #        print("Applying hflip filter", file=sys.stderr)
+        #        st = st.filter('hflip')
             # Print the command for debugging
             cmd = ffmpeg.output(st, outp, vcodec='libx264', acodec='aac')
             print("Running ffmpeg command:", cmd.compile(), file=sys.stderr)
