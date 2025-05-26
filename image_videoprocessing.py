@@ -50,10 +50,10 @@ def process_videos_logic(vids, batch, intensity, opts, out, hist_folder):
                 b = scale_range(-0.05, 0.05, intensity) if opts['brightness'] else 0
                 print(f"Applying eq filter with contrast={c}, brightness={b}", file=sys.stderr)
                 st = st.filter('eq', contrast=c, brightness=b)
-            if opts['rotate']:
-                angle_rads = scale_range(-2, 2, intensity) * 3.1415 / 180
-                print(f"Applying rotate filter with angle (rads): {angle_rads}", file=sys.stderr)
-                st = st.filter('rotate', angle_rads)
+        #    if opts['rotate']:
+        #       angle_rads = scale_range(-2, 2, intensity) * 3.1415 / 180
+        #       print(f"Applying rotate filter with angle (rads): {angle_rads}", file=sys.stderr)
+        #      st = st.filter('rotate', angle_rads)
             if opts['crop']:
                 dx, dy = int(w * scale_range(0.01, 0.03, intensity)), int(h * scale_range(0.01, 0.03, intensity))
                 print(f"Applying crop filter: dx={dx}, dy={dy}", file=sys.stderr)
