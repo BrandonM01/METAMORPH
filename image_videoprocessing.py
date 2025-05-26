@@ -1,8 +1,6 @@
 import os
 import random
 import shutil
-import zipfile
-import datetime
 from PIL import Image, ImageEnhance
 import ffmpeg
 import sys
@@ -29,7 +27,7 @@ def process_images_logic(images, batch, intensity, opts, out, hist_folder):
             if opts['flip'] and random.random() > 0.5:
                 var = var.transpose(Image.FLIP_LEFT_RIGHT)
             fn = f"{name}_variant_{i+1}.jpg"
-            var_rgb = var.convert("RGB")
+            var_rgb = var.convert("RGB")  # Ensure JPEG compatibility
             var_rgb.save(os.path.join(out, fn))
             var_rgb.save(os.path.join(hist_folder, fn))
 
@@ -45,25 +43,35 @@ def process_videos_logic(vids, batch, intensity, opts, out, hist_folder):
             outp = os.path.join(out, f"{name}_variant_{i+1}.mp4")
             hist = os.path.join(hist_folder, f"{name}_variant_{i+1}.mp4")
             st = ffmpeg.input(src)
+            # Build filter chain step by step
+            filter_chain = []
             if opts['contrast'] or opts['brightness']:
                 c = 1 + scale_range(-0.1, 0.1, intensity) if opts['contrast'] else 1
                 b = scale_range(-0.05, 0.05, intensity) if opts['brightness'] else 0
+                print(f"Applying eq filter with contrast={c}, brightness={b}", file=sys.stderr)
                 st = st.filter('eq', contrast=c, brightness=b)
             if opts['rotate']:
-                st = st.filter('rotate', scale_range(-2, 2, intensity) * 3.1415 / 180)
+                angle_rads = scale_range(-2, 2, intensity) * 3.1415 / 180
+                print(f"Applying rotate filter with angle (rads): {angle_rads}", file=sys.stderr)
+                st = st.filter('rotate', angle_rads)
             if opts['crop']:
                 dx, dy = int(w * scale_range(0.01, 0.03, intensity)), int(h * scale_range(0.01, 0.03, intensity))
+                print(f"Applying crop filter: dx={dx}, dy={dy}", file=sys.stderr)
                 st = st.filter('crop', w - 2 * dx, h - 2 * dy, dx, dy).filter('scale', w, h)
             if opts['flip'] and random.random() > 0.5:
+                print("Applying hflip filter", file=sys.stderr)
                 st = st.filter('hflip')
+            # Print the command for debugging
+            cmd = ffmpeg.output(st, outp, vcodec='libx264', acodec='aac')
+            print("Running ffmpeg command:", cmd.compile(), file=sys.stderr)
             try:
-                ffmpeg.run(
-                    ffmpeg.output(st, outp, vcodec='libx264', acodec='aac'),
-                    overwrite_output=True
-                )
+                ffmpeg.run(cmd, overwrite_output=True)
             except ffmpeg.Error as e:
+                print("ffmpeg exception:", e, file=sys.stderr)
                 print("ffmpeg stdout:\n", e.stdout.decode() if e.stdout else e.stdout, file=sys.stderr)
                 print("ffmpeg stderr:\n", e.stderr.decode() if e.stderr else e.stderr, file=sys.stderr)
+                if e.stdout is None and e.stderr is None:
+                    print("Both ffmpeg stdout and stderr are None. This may indicate a very early process failure.", file=sys.stderr)
                 raise
             shutil.copy(outp, hist)
         os.remove(src)
