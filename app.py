@@ -27,14 +27,6 @@ from google_drive import start_auth, handle_callback
 # Import new processing logic
 from image_videoprocessing import process_images_logic, process_videos_logic
 
-# -------------------- Favicon --------------------
-@app.route('/favicon.ico')
-def favicon():
-    return send_from_directory(
-        os.path.join(app.root_path, 'static'),
-        'favicon.ico',
-        mimetype='image/vnd.microsoft.icon'
-    )
 
 # -------------------- Folders --------------------
 OUTPUT_FOLDER = "output"
@@ -53,6 +45,15 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+
+# -------------------- Favicon --------------------
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(
+        os.path.join(app.root_path, 'static'),
+        'favicon.ico',
+        mimetype='image/vnd.microsoft.icon'
+    )
 
 # -------------------- Login Manager --------------------
 login_manager = LoginManager()
