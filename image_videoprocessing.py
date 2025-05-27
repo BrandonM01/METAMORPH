@@ -6,10 +6,17 @@ import ffmpeg
 import sys
 import traceback
 
+OUTPUT_FOLDER = "output"
+HISTORY_FOLDER = "history"
+
+# Ensure output/history folders exist
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+os.makedirs(HISTORY_FOLDER, exist_ok=True)
+
 def scale_range(min_val, max_val, intensity):
     return random.uniform(min_val * (intensity / 100), max_val * (intensity / 100))
 
-def process_images_logic(images, batch, intensity, opts, out, hist_folder):
+def process_images_logic(images, batch, intensity, opts, out=OUTPUT_FOLDER, hist_folder=HISTORY_FOLDER):
     for img_file in images:
         try:
             print(f"Opening image file: {img_file.filename}", file=sys.stderr)
@@ -30,10 +37,10 @@ def process_images_logic(images, batch, intensity, opts, out, hist_folder):
                 if opts.get('flip') and random.random() > 0.5:
                     var = var.transpose(Image.FLIP_LEFT_RIGHT)
                 fn = f"{name}_variant_{i+1}.jpg"
-                var_rgb = var.convert("RGB")  # Ensure JPEG compatibility
                 out_path = os.path.join(out, fn)
                 hist_path = os.path.join(hist_folder, fn)
                 print(f"Saving image variant to {out_path} and {hist_path}", file=sys.stderr)
+                var_rgb = var.convert("RGB")  # Ensure JPEG compatibility
                 var_rgb.save(out_path)
                 var_rgb.save(hist_path)
         except Exception as e:
@@ -41,7 +48,7 @@ def process_images_logic(images, batch, intensity, opts, out, hist_folder):
             traceback.print_exc(file=sys.stderr)
             raise
 
-def process_videos_logic(vids, batch, intensity, opts, out, hist_folder):
+def process_videos_logic(vids, batch, intensity, opts, out=OUTPUT_FOLDER, hist_folder=HISTORY_FOLDER):
     for vf in vids:
         try:
             src = os.path.join('uploads', vf.filename)
@@ -57,7 +64,7 @@ def process_videos_logic(vids, batch, intensity, opts, out, hist_folder):
                 outp = os.path.join(out, f"{name}_variant_{i+1}.mp4")
                 hist = os.path.join(hist_folder, f"{name}_variant_{i+1}.mp4")
                 st = ffmpeg.input(src)
-                # ---- Uncomment filters ONE AT A TIME during debugging ----
+                # --- Uncomment and debug filters one at a time if needed ---
                 # if opts.get('contrast') or opts.get('brightness'):
                 #     c = 1 + scale_range(-0.1, 0.1, intensity) if opts.get('contrast') else 1
                 #     b = scale_range(-0.05, 0.05, intensity) if opts.get('brightness') else 0
