@@ -82,8 +82,8 @@ def process_videos_logic(vids, batch, intensity, opts, out=OUTPUT_FOLDER, hist_f
                 #     print("Applying hflip filter", file=sys.stderr)
                 #     st = st.filter('hflip')
                 # ---------------------------------------------------------
-                cmd = ffmpeg.output(st, outp, vcodec='libx264', an=None)
-                print(f"Running ffmpeg command: {cmd.compile()}", file=sys.stderr)
+                cmd = ffmpeg.output(st, outp, vcodec='libx264', acodec='aac')
+                ffmpeg.run(cmd, overwrite_output=True)
                 try:
                     ffmpeg.run(cmd, overwrite_output=True)
                     print("ffmpeg ran successfully.", file=sys.stderr)
