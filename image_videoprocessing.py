@@ -64,26 +64,34 @@ def process_videos_logic(vids, batch, intensity, opts, out=OUTPUT_FOLDER, hist_f
                 outp = os.path.join(out, f"{name}_variant_{i+1}.mp4")
                 hist = os.path.join(hist_folder, f"{name}_variant_{i+1}.mp4")
                 st = ffmpeg.input(src)
-                # --- Uncomment and debug filters one at a time if needed ---
-                # if opts.get('contrast') or opts.get('brightness'):
-                #     c = 1 + scale_range(-0.1, 0.1, intensity) if opts.get('contrast') else 1
-                #     b = scale_range(-0.05, 0.05, intensity) if opts.get('brightness') else 0
-                #     print(f"Applying eq filter with contrast={c}, brightness={b}", file=sys.stderr)
-                #     st = st.filter('eq', contrast=c, brightness=b)
-                # if opts.get('rotate'):
-                #     angle_rads = scale_range(-2, 2, intensity) * 3.1415 / 180
-                #     print(f"Applying rotate filter with angle (rads): {angle_rads}", file=sys.stderr)
-                #     st = st.filter('rotate', angle_rads)
-                # if opts.get('crop'):
-                #     dx, dy = int(w * scale_range(0.01, 0.03, intensity)), int(h * scale_range(0.01, 0.03, intensity))
-                #     print(f"Applying crop filter: dx={dx}, dy={dy}", file=sys.stderr)
-                #     st = st.filter('crop', w - 2 * dx, h - 2 * dy, dx, dy).filter('scale', w, h)
-                # if opts.get('flip') and random.random() > 0.5:
-                #     print("Applying hflip filter", file=sys.stderr)
-                #     st = st.filter('hflip')
-                # ---------------------------------------------------------
+                
+                # Contrast & Brightness
+                c = 1 + scale_range(-0.1, 0.1, intensity) if opts.get('contrast') else 1
+                b = scale_range(-0.05, 0.05, intensity) if opts.get('brightness') else 0
+                if opts.get('contrast') or opts.get('brightness'):
+                    print(f"Applying eq filter with contrast={c}, brightness={b}", file=sys.stderr)
+                    st = st.filter('eq', contrast=c, brightness=b)
+                
+                # Rotation
+                if opts.get('rotate'):
+                    angle_degrees = scale_range(-5, 5, intensity)
+                    angle_rads = angle_degrees * 3.1415926 / 180
+                    print(f"Applying rotate filter with angle (rads): {angle_rads}", file=sys.stderr)
+                    st = st.filter('rotate', angle=angle_rads, fillcolor='black')
+                
+                # Crop (then scale back to original size)
+                if opts.get('crop'):
+                    dx = int(w * scale_range(0.01, 0.05, intensity))
+                    dy = int(h * scale_range(0.01, 0.05, intensity))
+                    print(f"Applying crop filter: dx={dx}, dy={dy}", file=sys.stderr)
+                    st = st.filter('crop', w - 2 * dx, h - 2 * dy, dx, dy).filter('scale', w, h)
+                
+                # Horizontal flip (randomly, like images)
+                if opts.get('flip') and random.random() > 0.5:
+                    print("Applying hflip filter", file=sys.stderr)
+                    st = st.filter('hflip')
+
                 cmd = ffmpeg.output(st, outp, vcodec='libx264', acodec='aac')
-                ffmpeg.run(cmd, overwrite_output=True)
                 try:
                     ffmpeg.run(cmd, overwrite_output=True)
                     print("ffmpeg ran successfully.", file=sys.stderr)
