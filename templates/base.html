@@ -16,18 +16,10 @@ body {
 <body class="{% if current_user.is_authenticated and current_user.dark_mode_enabled %}dark-mode{% endif %}">
 
 {% if current_user.is_authenticated %}
-<div style="position: absolute; top: 20px; right: 20px; font-size: 14px;">
-    Logged in as: {{ current_user.username }}
-    {% if current_user.plan == 'pro+' %}
-        <span style="background: #9c27b0; color: #fff; border-radius: 4px; padding: 2px 7px; font-size: 12px; margin-left: 5px;">Pro+</span>
-    {% elif current_user.plan == 'pro' %}
-        <span style="background: #1976d2; color: #fff; border-radius: 4px; padding: 2px 7px; font-size: 12px; margin-left: 5px;">Pro</span>
-    {% else %}
-        <span style="background: #bbb; color: #222; border-radius: 4px; padding: 2px 7px; font-size: 12px; margin-left: 5px;">Free</span>
-    {% endif %}
-    |
-    <a href="{{ url_for('settings') }}" class="nav-link">Settings</a> |
-    <a href="{{ url_for('logout') }}" class="nav-link">Logout</a>
+<div class="user-status-bar" style="padding: 10px 20px; background: #f4f4f4; font-size: 16px; margin-bottom: 7px; border-radius: 0 0 6px 6px;">
+    <b>User:</b> {{ current_user.username }} &nbsp;|&nbsp;
+    <b>Tier:</b> {{ current_user.plan|capitalize }} &nbsp;|&nbsp;
+    <b>Tokens left:</b> <span id="tokens-left">{{ current_user.tokens }}</span>
 </div>
 {% endif %}
 
