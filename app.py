@@ -123,6 +123,11 @@ def logout():
     flash('👋 Logged out successfully.','success')
     return redirect(url_for('login'))
 
+@app.route('/apply-referral/<code>')
+def apply_referral(code):
+    session['referral_code'] = code
+    return redirect(url_for('register'))
+
 # -------------------- Settings --------------------
 @app.route('/settings', methods=['GET','POST'])
 @login_required
@@ -134,7 +139,7 @@ def settings():
         db.session.commit()
         flash('✅ Settings updated.','success')
         return redirect(url_for('settings'))
-    referral_link = url_for('referral.apply_referral', code=current_user.referral_code, _external=True)
+    referral_link = url_for('apply_referral', code=current_user.referral_code, _external=True)
     return render_template('settings.html', referral_link=referral_link)
 
 # -------------------- Plans & Stripe Key -------------------
