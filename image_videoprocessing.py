@@ -36,13 +36,20 @@ def process_images_logic(images, batch, intensity, opts, out=OUTPUT_FOLDER, hist
                     var = var.crop((dx, dy, w - dx, h - dy))
                 if opts.get('flip') and random.random() > 0.5:
                     var = var.transpose(Image.FLIP_LEFT_RIGHT)
-                fn = f"{name}_variant_{i+1}.jpg"
-                out_path = os.path.join(out, fn)
-                hist_path = os.path.join(hist_folder, fn)
-                print(f"Saving image variant to {out_path} and {hist_path}", file=sys.stderr)
-                var_rgb = var.convert("RGB")  # Ensure JPEG compatibility
-                var_rgb.save(out_path)
-                var_rgb.save(hist_path)
+
+                # Decide on file extension and format based on image mode
+                if var.mode == "RGBA":
+                    fn = f"{name}_variant_{i+1}.png"
+                    out_path = os.path.join(out, fn)
+                    hist_path = os.path.join(hist_folder, fn)
+                    var.save(out_path, format="PNG")
+                    var.save(hist_path, format="PNG")
+                else:
+                    fn = f"{name}_variant_{i+1}.jpg"
+                    out_path = os.path.join(out, fn)
+                    hist_path = os.path.join(hist_folder, fn)
+                    var.convert("RGB").save(out_path, format="JPEG")
+                    var.convert("RGB").save(hist_path, format="JPEG")
         except Exception as e:
             print(f"Exception processing image {img_file.filename}: {e}", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
