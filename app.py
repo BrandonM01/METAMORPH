@@ -140,7 +140,11 @@ def settings():
         flash('✅ Settings updated.','success')
         return redirect(url_for('settings'))
     referral_link = url_for('apply_referral', code=current_user.referral_code, _external=True)
-    return render_template('settings.html', referral_link=referral_link)
+    return render_template(
+    'settings.html',
+    referral_link=referral_link,
+    referral_code=current_user.referral_code  # Pass the code to the template
+)
 
 # -------------------- Plans & Stripe Key -------------------
 @app.route('/plans')
