@@ -1,14 +1,10 @@
 #!/bin/bash
 
-# Install Python packages (only if not already installed)
-pip install --no-cache-dir \
-flask flask_sqlalchemy Flask-Migrate Flask-Login \
-python-dotenv PyDrive Pillow ffmpeg-python stripe \
-google-auth-oauthlib google-api-python-client gunicorn \
-Werkzeug opencv-python numpy
+# Install dependencies
+pip install -r requirements.txt
 
-# Optional: install ffmpeg system-wide
-apt update && apt install -y ffmpeg
+# Update packages
+apt update && apt upgrade -y
 
-# Run Flask app with Gunicorn on port 80
-gunicorn -w 1 -b 0.0.0.0:80 app:app
+# Start the app
+gunicorn app:app --bind 0.0.0.0:5000
