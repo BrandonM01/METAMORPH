@@ -38,7 +38,7 @@ def process_images_logic(images, batch, intensity, opts, out=OUTPUT_FOLDER, hist
                     var = var.transpose(Image.FLIP_LEFT_RIGHT)
 
                 # Decide on file extension and format based on image mode
-                if var.mode == "RGBA":
+                if var.mode in ("RGBA", "LA") or (var.mode == "P" and "transparency" in var.info):
                     fn = f"{name}_variant_{i+1}.png"
                     out_path = os.path.join(out, fn)
                     hist_path = os.path.join(hist_folder, fn)
