@@ -1,16 +1,10 @@
 #!/bin/bash
 
-# Exit immediately if a command exits with a non-zero status
-set -e
+# Install dependencies
+pip install -r requirements.txt
 
-# Ensure ffmpeg is installed (for environments where it isn't preinstalled)
-if ! command -v ffmpeg &> /dev/null; then
-    apt-get update && apt-get install -y ffmpeg
-fi
+# Update packages
+apt update && apt upgrade -y
 
-# Upgrade pip and install dependencies
-pip install --upgrade pip
-pip install --no-cache-dir -r requirements.txt
-
-# Start the app with Gunicorn on port 5000
+# Start the app
 gunicorn app:app --bind 0.0.0.0:5000
