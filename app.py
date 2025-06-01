@@ -68,40 +68,42 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 # -------------------- Auth & Referral --------------------
-@app.route('/apply-referral/<code>')
-def apply_referral(code):
-    session['referral_code'] = code
-    return redirect(url_for('register'))
+import string
 
 @app.route('/register', methods=['GET','POST'])
 def register():
     if request.method == 'POST':
-        email = request.form['email']
-        pwd   = request.form['password']
-        if User.query.filter_by(email=email).first():
-            flash('⚠️ Email already registered.','error')
+        try:
+            email = request.form['email']
+            pwd   = request.form['password']
+            if User.query.filter_by(email=email).first():
+                flash('⚠️ Email already registered.', 'error')
+                return redirect(url_for('register'))
+            new_user = User(
+                email=email,
+                password=generate_password_hash(pwd),
+                username=email.split('@')[0]
+            )
+            code = session.pop('referral_code', None)
+            if code:
+                ref = User.query.filter_by(referral_code=code).first()
+                if ref and ref.id != new_user.id:
+                    new_user.referred_by_id = ref.id
+                    ref.tokens += 10
+                    db.session.add(ref)
+            new_user.referral_code = ''.join(
+                random.choices(string.ascii_letters + string.digits, k=8)
+            )
+            db.session.add(new_user)
+            db.session.commit()
+            flash('✅ Registration successful! Please log in.', 'success')
+            return redirect(url_for('login'))
+        except Exception as e:
+            print("Registration error:", e)
+            flash('❌ Registration failed. Please try again or contact support.', 'error')
             return redirect(url_for('register'))
-        new_user = User(
-            email=email,
-            password=generate_password_hash(pwd),
-            username=email.split('@')[0]
-        )
-        code = session.pop('referral_code', None)
-        if code:
-            ref = User.query.filter_by(referral_code=code).first()
-            if ref and ref.id != new_user.id:
-                new_user.referred_by_id = ref.id
-                ref.tokens += 10
-                db.session.add(ref)
-        new_user.referral_code = ''.join(
-            random.choices(random.choices.__defaults__[0] + random.choices.__defaults__[1], k=8)
-        )
-        db.session.add(new_user)
-        db.session.commit()
-        flash('✅ Registration successful! Please log in.','success')
-        return redirect(url_for('login'))
     return render_template('register.html')
-
+    
 @app.route('/login', methods=['GET','POST'])
 def login():
     if request.method == 'POST':
