@@ -13,13 +13,16 @@
 
         <label class="form-label">Batch Size (number of variants per video):</label>
         {% if current_user.plan == 'free' %}
-            <input class="form-input" type="number" name="batch_size" value="5" min="1" max="5" readonly>
-            <p style="font-size: 13px; color: grey;">Upgrade to increase batch size</p>
-        {% elif current_user.plan == 'pro' %}
-            <input class="form-input" type="number" name="batch_size" value="5" min="1" max="25" required>
-        {% else %}
-            <input class="form-input" type="number" name="batch_size" value="5" min="1" max="50" required>
-        {% endif %}
+            <select class="form-input" name="batch_size" required>
+                <option value="1">1</option>
+                <option value="5" selected>5</option>
+            </select>
+            <p style="font-size: 13px; color: grey;">Free tier: Choose 1 or 5. Upgrade to increase batch size.</p>
+{% elif current_user.plan == 'pro' %}
+    <input class="form-input" type="number" name="batch_size" value="5" min="1" max="25" required>
+{% else %}
+    <input class="form-input" type="number" name="batch_size" value="5" min="1" max="50" required>
+{% endif %}
 
         <label class="form-label">Intensity (1–100):</label>
         <input class="form-slider" type="range" name="intensity" min="1" max="100" value="30" oninput="this.nextElementSibling.value = this.value">

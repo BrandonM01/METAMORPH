@@ -16,10 +16,64 @@ body {
 <body class="{% if current_user.is_authenticated and current_user.dark_mode_enabled %}dark-mode{% endif %}">
 
 {% if current_user.is_authenticated %}
-<div style="position: absolute; top: 20px; right: 20px; font-size: 14px;">
-    Logged in as: {{ current_user.email }} |
-    <a href="{{ url_for('settings') }}" class="nav-link">Settings</a> |
-    <a href="{{ url_for('logout') }}" class="nav-link">Logout</a>
+<style>
+.user-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 1.5em;
+    padding: 12px 30px;
+    background: linear-gradient(90deg, #f7fafc 70%, #e3f0ff 100%);
+    font-size: 16px;
+    margin-bottom: 12px;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 1px 6px rgba(50,70,120,0.05);
+}
+.tier-badge {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 3px 12px;
+    border-radius: 16px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.tier-badge-free { background: #bbb; color: #222; }
+.tier-badge-pro { background: #1976d2; color: #fff; }
+.tier-badge-proplus { background: #9c27b0; color: #fff; }
+.user-actions a {
+    background: #fff;
+    border: 1px solid #d4dce8;
+    color: #1976d2;
+    border-radius: 6px;
+    padding: 6px 16px;
+    text-decoration: none;
+    font-weight: 500;
+    margin-left: 6px;
+    transition: background 0.18s, border 0.18s;
+}
+.user-actions a:hover {
+    background: #1976d2;
+    color: #fff;
+    border-color: #1976d2;
+}
+</style>
+<div class="user-status-bar">
+    <span><b>User:</b> {{ current_user.username }}</span>
+    <span>
+        <b>Tier:</b>
+        {% if current_user.plan == 'pro+' %}
+            <span class="tier-badge tier-badge-proplus">Pro+</span>
+        {% elif current_user.plan == 'pro' %}
+            <span class="tier-badge tier-badge-pro">Pro</span>
+        {% else %}
+            <span class="tier-badge tier-badge-free">Free</span>
+        {% endif %}
+    </span>
+    <span><b>Tokens left:</b> <span id="tokens-left">{{ current_user.tokens }}</span></span>
+    <span class="user-actions" style="margin-left:auto;">
+        <a href="{{ url_for('settings') }}">Settings</a>
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </span>
 </div>
 {% endif %}
 

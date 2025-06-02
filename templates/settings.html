@@ -9,7 +9,7 @@
     <div class="form-container">
         <div style="margin-bottom: 20px;">
             <div style="font-size: 50px; margin-bottom: 10px;">
-                🧑‍💻 🖥️
+                 🖥️
             </div>
             <p><strong>Email:</strong> {{ current_user.email }}</p>
             <p><strong>Username:</strong> {{ current_user.username }}</p>
@@ -21,7 +21,13 @@
             <label for="username">Edit Username:</label><br>
             <input type="text" name="username" value="{{ current_user.username }}" class="form-input">
         </div>
-
+<div style="text-align: left; margin-bottom: 20px;">
+    <label>Your Referral Code:</label><br>
+    <span style="font-weight:bold;">{{ referral_code }}</span>
+    <br>
+    <label>Referral Link:</label><br>
+    <input type="text" readonly value="{{ referral_link }}" style="width:100%; font-size: 90%;">
+</div>
         <div style="text-align: left; margin-bottom: 20px;">
             <label>
                 <input type="checkbox" name="backup_enabled" {% if current_user.backup_enabled %}checked{% endif %}>
