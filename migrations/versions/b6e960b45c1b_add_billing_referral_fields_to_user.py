@@ -15,7 +15,7 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    # 1. Add columns and alter columns (NO constraints)
+    # Step 1: Add columns and alter columns (NO constraints)
     with op.batch_alter_table('user', schema=None) as batch_op:
         batch_op.add_column(sa.Column('stripe_customer_id', sa.String(length=100), nullable=True))
         batch_op.add_column(sa.Column('stripe_subscription_id', sa.String(length=100), nullable=True))
@@ -31,18 +31,18 @@ def upgrade():
                nullable=False)
         # Do NOT create constraints here!
 
-    # 2. Add constraints in a separate block
+    # Step 2: Add constraints in a separate block
     with op.batch_alter_table('user', schema=None) as batch_op:
         batch_op.create_unique_constraint('uq_user_referral_code', ['referral_code'])
         batch_op.create_foreign_key('fk_user_referred_by_id', 'user', ['referred_by_id'], ['id'])
 
 def downgrade():
-    # 1. Drop constraints first
+    # Step 1: Drop constraints first
     with op.batch_alter_table('user', schema=None) as batch_op:
         batch_op.drop_constraint('fk_user_referred_by_id', type_='foreignkey')
         batch_op.drop_constraint('uq_user_referral_code', type_='unique')
 
-    # 2. Then drop columns and revert column changes
+    # Step 2: Drop columns and revert column changes
     with op.batch_alter_table('user', schema=None) as batch_op:
         batch_op.alter_column('password',
                existing_type=sa.VARCHAR(length=150),
