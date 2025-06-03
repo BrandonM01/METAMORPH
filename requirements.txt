@@ -13,3 +13,4 @@ gunicorn
 Werkzeug
 opencv-python
 numpy
+piexif
