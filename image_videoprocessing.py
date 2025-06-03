@@ -6,6 +6,44 @@ import ffmpeg
 import sys
 import traceback
 
+import piexif
+import piexif.helper
+from metadata_words import random_exif_fields
+
+def rational_from_float(val):
+    # Convert float to EXIF rational (num, den)
+    deg = int(abs(val))
+    min_ = int((abs(val) - deg) * 60)
+    sec = int((((abs(val) - deg) * 60) - min_) * 60 * 100)
+    return ((deg, 1), (min_, 1), (sec, 100))
+
+def randomize_image_exif(img):
+    exif_data = random_exif_fields()
+    exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
+
+    # 0th IFD
+    exif_dict["0th"][piexif.ImageIFD.Artist] = exif_data["artist"].encode()
+    exif_dict["0th"][piexif.ImageIFD.ImageDescription] = exif_data["description"].encode()
+    exif_dict["0th"][piexif.ImageIFD.Copyright] = exif_data["copyright"].encode()
+    exif_dict["0th"][piexif.ImageIFD.DateTime] = exif_data["datetime"].encode()
+
+    # GPS IFD
+    lat = exif_data["gps_lat"]
+    lon = exif_data["gps_lon"]
+    exif_dict["GPS"][piexif.GPSIFD.GPSLatitudeRef] = b'N' if lat >= 0 else b'S'
+    exif_dict["GPS"][piexif.GPSIFD.GPSLatitude] = rational_from_float(lat)
+    exif_dict["GPS"][piexif.GPSIFD.GPSLongitudeRef] = b'E' if lon >= 0 else b'W'
+    exif_dict["GPS"][piexif.GPSIFD.GPSLongitude] = rational_from_float(lon)
+    
+    # Save to BytesIO to attach exif
+    import io
+    output = io.BytesIO()
+    img.save(output, format="JPEG", exif=piexif.dump(exif_dict))
+    output.seek(0)
+    return Image.open(output)
+
+# ... rest of your code (scale_range, process_images_logic, etc)
+
 OUTPUT_FOLDER = "output"
 HISTORY_FOLDER = "history"
 
@@ -48,8 +86,11 @@ def process_images_logic(images, batch, intensity, opts, out=OUTPUT_FOLDER, hist
                     fn = f"{name}_variant_{i+1}.jpg"
                     out_path = os.path.join(out, fn)
                     hist_path = os.path.join(hist_folder, fn)
-                    var.convert("RGB").save(out_path, format="JPEG")
-                    var.convert("RGB").save(hist_path, format="JPEG")
+                    img_to_save = var.convert("RGB")
+                    if opts.get('metadata'):
+                        img_to_save = randomize_image_exif(img_to_save)
+                    img_to_save.save(out_path, format="JPEG")
+                    img_to_save.save(hist_path, format="JPEG")
         except Exception as e:
             print(f"Exception processing image {img_file.filename}: {e}", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
