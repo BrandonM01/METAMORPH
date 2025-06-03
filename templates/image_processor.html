@@ -30,12 +30,11 @@
 
         <div class="checkbox-group">
             <label><input type="checkbox" id="selectAllFunctions"> <strong>Select All</strong></label><br>
-            <label><input type="checkbox" name="change_metadata"> Metadata</label><br>
-            <label><input type="checkbox" name="adjust_contrast"> Contrast</label><br>
-            <label><input type="checkbox" name="adjust_brightness"> Brightness</label><br>
-            <label><input type="checkbox" name="rotate"> Rotate</label><br>
-            <label><input type="checkbox" name="crop"> Crop</label><br>
-            <label><input type="checkbox" name="flip_horizontal"> Flip</label>
+            <label><input type="checkbox" name="adjust_contrast" class="function-checkbox"> Adjust Contrast</label><br>
+            <label><input type="checkbox" name="adjust_brightness" class="function-checkbox"> Adjust Brightness</label><br>
+            <label><input type="checkbox" name="rotate" class="function-checkbox"> Rotate Slightly</label><br>
+            <label><input type="checkbox" name="crop" class="function-checkbox"> Crop Slightly</label><br>
+            <label><input type="checkbox" name="flip_horizontal" class="function-checkbox"> Flip Horizontally</label>
         </div>
 
         <button class="main-button" id="submitBtn" type="submit">Process Images</button>
@@ -57,6 +56,55 @@
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Select All logic
+    var selectAll = document.getElementById('selectAllFunctions');
+    var funcCheckboxes = document.querySelectorAll('.function-checkbox');
+
+    // Load function selection state from localStorage
+    funcCheckboxes.forEach(function(cb) {
+        const stored = localStorage.getItem('func_' + cb.name);
+        if (stored !== null) {
+            cb.checked = stored === 'true';
+        }
+    });
+
+    // If all are checked, check Select All
+    function updateSelectAll() {
+        selectAll.checked = Array.from(funcCheckboxes).every(cb => cb.checked);
+    }
+    updateSelectAll();
+
+    // When Select All is clicked
+    selectAll.addEventListener('change', function() {
+        funcCheckboxes.forEach(function(cb) {
+            cb.checked = selectAll.checked;
+            localStorage.setItem('func_' + cb.name, cb.checked);
+        });
+    });
+
+    // When any function checkbox is changed
+    funcCheckboxes.forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            localStorage.setItem('func_' + cb.name, cb.checked);
+            updateSelectAll();
+        });
+    });
+
+    // On reset, restore function selection from localStorage
+    window.resetUpload = function() {
+        document.getElementById('fileInput').value = '';
+        document.getElementById('downloadSection').style.display = 'none';
+        document.getElementById('submitBtn').style.display = 'inline-block';
+        document.getElementById('newUploadBtn').style.display = 'none';
+        funcCheckboxes.forEach(function(cb) {
+            const stored = localStorage.getItem('func_' + cb.name);
+            cb.checked = stored === 'true';
+        });
+        updateSelectAll();
+    };
+});
+
 document.getElementById('imageForm').addEventListener('submit', function(e) {
     e.preventDefault();
     var formData = new FormData(this);
