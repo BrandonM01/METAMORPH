@@ -57,6 +57,7 @@ class User(UserMixin, db.Model):
     stripe_subscription_id = db.Column(db.String(100), nullable=True)
     plan                   = db.Column(db.String(50), default='free')
     tokens                 = db.Column(db.Integer, default=0)
+    tokens_last_reset = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     referral_code   = db.Column(db.String(20), unique=True, nullable=True)
     referred_by_id  = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     referrals       = db.relationship(
