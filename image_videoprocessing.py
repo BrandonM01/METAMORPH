@@ -5,10 +5,9 @@ from PIL import Image, ImageEnhance
 import ffmpeg
 import sys
 import traceback
-
 import piexif
 import piexif.helper
-from metadata_words import random_exif_fields
+from metadata_words import random_exif_fields, random_metadata_fields
 
 def rational_from_float(val):
     # Convert float to EXIF rational (num, den)
@@ -41,6 +40,14 @@ def randomize_image_exif(img):
     img.save(output, format="JPEG", exif=piexif.dump(exif_dict))
     output.seek(0)
     return Image.open(output)
+
+def ffmpeg_add_random_metadata(cmd, opts):
+    if not opts.get("metadata"):
+        return cmd
+    meta = random_metadata_fields()
+    for k, v in meta.items():
+        cmd = cmd.global_args('-metadata', f'{k}={v}')
+    return cmd
 
 # ... rest of your code (scale_range, process_images_logic, etc)
 
@@ -140,6 +147,7 @@ def process_videos_logic(vids, batch, intensity, opts, out=OUTPUT_FOLDER, hist_f
                     st = st.filter('hflip')
 
                 cmd = ffmpeg.output(st, outp, vcodec='libx264', acodec='aac')
+                cmd = ffmpeg_add_random_metadata(cmd, opts)
                 try:
                     ffmpeg.run(cmd, overwrite_output=True)
                     print("ffmpeg ran successfully.", file=sys.stderr)
