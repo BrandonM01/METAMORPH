@@ -46,19 +46,32 @@ def webhook_received():
         event = stripe.Webhook.construct_event(payload, sig, os.getenv('STRIPE_WEBHOOK_SECRET'))
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-    if event['type'] == 'invoice.payment_succeeded':
-        inv = event['data']['object']
-        user = User.query.filter_by(stripe_subscription_id=inv['subscription']).first()
-        if user:
-            user.tokens += 100
-            db.session.commit()
+
+    # Handle customer.subscription.created
     if event['type'] == 'customer.subscription.created':
         sub = event['data']['object']
         user = User.query.filter_by(stripe_customer_id=sub['customer']).first()
         if user:
             user.plan = sub['items']['data'][0]['price']['nickname']
             user.stripe_subscription_id = sub['id']
+            # Store billing anchor
+            import datetime
+            user.billing_anchor = datetime.datetime.utcfromtimestamp(sub['current_period_start'])
             db.session.commit()
+
+    # Handle invoice.payment_succeeded
+    if event['type'] == 'invoice.payment_succeeded':
+        inv = event['data']['object']
+        user = User.query.filter_by(stripe_subscription_id=inv['subscription']).first()
+        if user:
+            # Update billing anchor
+            import datetime
+            lines = inv.get('lines', {}).get('data', [])
+            if lines:
+                user.billing_anchor = datetime.datetime.utcfromtimestamp(lines[0]['period']['start'])
+            user.tokens += 100  # Or reset to plan amount
+            db.session.commit()
+
     return jsonify({'status': 'success'})
 
 @subscription_bp.route('/purchase-topup')
