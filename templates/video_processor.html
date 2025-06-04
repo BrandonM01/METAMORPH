@@ -18,17 +18,16 @@
                 <option value="5" selected>5</option>
             </select>
             <p style="font-size: 13px; color: grey;">Free tier: Choose 1 or 5. Upgrade to increase batch size.</p>
-{% elif current_user.plan == 'pro' %}
-    <input class="form-input" type="number" name="batch_size" value="5" min="1" max="25" required>
-{% else %}
-    <input class="form-input" type="number" name="batch_size" value="5" min="1" max="50" required>
-{% endif %}
+        {% elif current_user.plan == 'pro' %}
+            <input class="form-input" type="number" name="batch_size" value="5" min="1" max="25" required>
+        {% else %}
+            <input class="form-input" type="number" name="batch_size" value="5" min="1" max="50" required>
+        {% endif %}
 
         <label class="form-label">Intensity (1–100):</label>
         <input class="form-slider" type="range" name="intensity" min="1" max="100" value="30" oninput="this.nextElementSibling.value = this.value">
         <output>30</output>
 
-    
         <div class="checkbox-group">
             <label><input type="checkbox" id="selectAllFunctions"> <strong>Select All</strong></label><br>
             <label><input type="checkbox" name="change_metadata" class="function-checkbox"> Metadata</label><br>
@@ -38,6 +37,27 @@
             <label><input type="checkbox" name="crop" class="function-checkbox"> Crop</label><br>
             <label><input type="checkbox" name="flip_horizontal" class="function-checkbox"> Flip</label>
         </div>
+
+        <button class="main-button" id="submitBtn" type="submit">Process Videos</button>
+
+        <div class="spinner" id="spinner" style="display:none; margin-top:20px;">
+            <img src="{{ url_for('static', filename='spinner.gif') }}" alt="Loading..." style="width:40px;height:40px;">
+        </div>
+
+        <div id="downloadSection" style="display:none; margin-top:30px;">
+            <a id="downloadLink" class="main-button" style="background-color: green; text-decoration: none;">Download Ready!</a>
+            <div style="height: 20px;"></div>
+        </div>
+
+        <div id="errorMsg" style="color: red; margin-top: 20px; display: none;"></div>
+
+        <button class="main-button" id="newUploadBtn" type="button" onclick="resetUpload()" style="display:none; margin-top:20px;">Start New Upload</button>
+
+    </form>
+
+    <a href="{{ url_for('home') }}" class="back-link">Back Home</a>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Select All logic
@@ -80,6 +100,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('downloadSection').style.display = 'none';
         document.getElementById('submitBtn').style.display = 'inline-block';
         document.getElementById('newUploadBtn').style.display = 'none';
+        document.getElementById('errorMsg').style.display = 'none';
         funcCheckboxes.forEach(function(cb) {
             const stored = localStorage.getItem('func_' + cb.name);
             cb.checked = stored === 'true';
@@ -87,29 +108,15 @@ document.addEventListener('DOMContentLoaded', function() {
         updateSelectAll();
     };
 });
-</script>
-        <button class="main-button" id="submitBtn" type="submit">Process Videos</button>
 
-        <div class="spinner" id="spinner" style="display:none; margin-top:20px;">
-            <img src="{{ url_for('static', filename='spinner.gif') }}" alt="Loading..." style="width:40px;height:40px;">
-        </div>
-
-        <div id="downloadSection" style="display:none; margin-top:30px;">
-            <a id="downloadLink" class="main-button" style="background-color: green; text-decoration: none;">Download Ready!</a>
-            <div style="height: 20px;"></div>
-        </div>
-
-        <button class="main-button" id="newUploadBtn" type="button" onclick="resetUpload()" style="display:none; margin-top:20px;">Start New Upload</button>
-
-    </form>
-
-    <a href="{{ url_for('home') }}" class="back-link">Back Home</a>
-</div>
-
-<script>
 document.getElementById('videoForm').addEventListener('submit', function(e) {
     e.preventDefault();
     var formData = new FormData(this);
+
+    // Hide previous feedback
+    document.getElementById('errorMsg').style.display = 'none';
+    document.getElementById('downloadSection').style.display = 'none';
+
     document.getElementById('submitBtn').style.display = 'none';
     document.getElementById('spinner').style.display = 'block';
 
@@ -120,14 +127,31 @@ document.getElementById('videoForm').addEventListener('submit', function(e) {
     .then(response => response.json())
     .then(data => {
         document.getElementById('spinner').style.display = 'none';
+
+        // Update token display in the navbar (base.html)
+        if (data.tokens_left !== undefined) {
+            document.getElementById('tokens-left').textContent = data.tokens_left;
+        }
+
+        if (data.error) {
+            document.getElementById('errorMsg').textContent = data.error;
+            document.getElementById('errorMsg').style.display = 'block';
+            document.getElementById('submitBtn').style.display = 'inline-block';
+            document.getElementById('newUploadBtn').style.display = 'none';
+            return;
+        }
+
+        // Success: Show download link
         document.getElementById('downloadSection').style.display = 'block';
         document.getElementById('downloadLink').href = '/download-zip/' + data.zip_filename;
         document.getElementById('newUploadBtn').style.display = 'inline-block';
         document.getElementById('downloadSection').scrollIntoView({ behavior: 'smooth' });
     })
     .catch(error => {
-        alert('An error occurred!');
-        console.error(error);
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('errorMsg').textContent = 'An error occurred!';
+        document.getElementById('errorMsg').style.display = 'block';
+        document.getElementById('submitBtn').style.display = 'inline-block';
     });
 });
 
@@ -136,6 +160,7 @@ function resetUpload() {
     document.getElementById('downloadSection').style.display = 'none';
     document.getElementById('submitBtn').style.display = 'inline-block';
     document.getElementById('newUploadBtn').style.display = 'none';
+    document.getElementById('errorMsg').style.display = 'none';
 }
 </script>
 {% endblock %}

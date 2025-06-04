@@ -60,3 +60,9 @@ def webhook_received():
             user.stripe_subscription_id = sub['id']
             db.session.commit()
     return jsonify({'status': 'success'})
+
+@subscription_bp.route('/purchase-topup')
+@login_required
+def purchase_topup():
+    # You can render a real template later; for now, just show a placeholder
+    return "Purchase top-up page coming soon!"

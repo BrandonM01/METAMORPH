@@ -24,6 +24,9 @@ from billing import subscription_bp, referral_bp
 # Import Google OAuth helpers
 from google_drive import start_auth, handle_callback
 
+# Import token.py
+from tokens import deduct_tokens, reset_user_tokens, get_plan_tokens
+
 # ---- Import your image and video processing logic ----
 from image_videoprocessing import process_images_logic, process_videos_logic
 
@@ -238,12 +241,20 @@ def process_images():
     out = os.path.join('processed', ts)
     os.makedirs(out, exist_ok=True)
 
-    # Use the safe image processing logic from image_videoprocessing.py!
+    # --- TOKEN CHECK ---
+    tokens_needed = len(images) * batch * 1  # 1 token per image variant
+    if current_user.tokens < tokens_needed:
+        return jsonify({'error': "Not enough tokens", 'tokens_left': current_user.tokens}), 402
+
+    # --- MAIN PROCESSING ---
     process_images_logic(
         images, batch, intensity, opts,
         out=out,
         hist_folder='static/history'
     )
+
+    # --- DEDUCT TOKENS ---
+    deduct_tokens(current_user, tokens_needed, db)
 
     zip_fn = f"images_{ts}.zip"
     zp = os.path.join('static/processed_zips', zip_fn)
@@ -253,7 +264,7 @@ def process_images():
     shutil.rmtree(out)
     if current_user.backup_enabled:
         upload_to_google_drive(zp, zip_fn)
-    return jsonify({'zip_filename': zip_fn})
+    return jsonify({'zip_filename': zip_fn, 'tokens_left': current_user.tokens})
 
 @app.route('/process-videos',methods=['POST'])
 @login_required
@@ -272,12 +283,20 @@ def process_videos():
     out = os.path.join('processed', ts)
     os.makedirs(out, exist_ok=True)
 
-    # Use the safe video processing logic from image_videoprocessing.py!
+    # --- TOKEN CHECK ---
+    tokens_needed = len(vids) * batch * 2  # 2 tokens per video variant
+    if current_user.tokens < tokens_needed:
+        return jsonify({'error': "Not enough tokens", 'tokens_left': current_user.tokens}), 402
+
+    # --- MAIN PROCESSING ---
     process_videos_logic(
         vids, batch, intensity, opts,
         out=out,
         hist_folder='static/history'
     )
+
+    # --- DEDUCT TOKENS ---
+    deduct_tokens(current_user, tokens_needed, db)
 
     zip_fn = f"videos_{ts}.zip"
     zp = os.path.join('static/processed_zips', zip_fn)
@@ -287,7 +306,7 @@ def process_videos():
     shutil.rmtree(out)
     if current_user.backup_enabled:
         upload_to_google_drive(zp, zip_fn)
-    return jsonify({'zip_filename': zip_fn})
+    return jsonify({'zip_filename': zip_fn, 'tokens_left': current_user.tokens})
 
 # -------------------- OAuth Routes --------------------
 @app.route('/oauth2start')
@@ -306,3 +325,9 @@ app.register_blueprint(referral_bp,     url_prefix='/referral')
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
+# -------------------- tokens left real time --------------------
+@app.route('/tokens-left')
+@login_required
+def tokens_left():
+    return jsonify({'tokens_left': current_user.tokens})

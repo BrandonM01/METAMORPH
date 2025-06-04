@@ -31,9 +31,9 @@ def is_unique(params, used_params, min_dist=0.07):
 
 def process_images_logic(images, batch, intensity, opts, out=OUTPUT_FOLDER, hist_folder=HISTORY_FOLDER):
     # Adjust these values as needed for your use case/platform
-    contrast_min, contrast_max = -8.0, 8.0
-    brightness_min, brightness_max = -5, 5
-    rotation_min, rotation_max = -45, 45
+    contrast_min, contrast_max = -4.0, 4.0
+    brightness_min, brightness_max = -2, 2
+    rotation_min, rotation_max = -25, 25
     crop_min, crop_max = 0.15, 0.35  # 5%–15% crop
 
     for img_file in images:
@@ -91,10 +91,10 @@ def process_images_logic(images, batch, intensity, opts, out=OUTPUT_FOLDER, hist
 
 def process_videos_logic(vids, batch, intensity, opts, out=OUTPUT_FOLDER, hist_folder=HISTORY_FOLDER):
     # Adjust these values as needed for your use case/platform
-    contrast_min, contrast_max = -8.0, 8.0
-    brightness_min, brightness_max = -5, 5
-    rotation_min, rotation_max = -45, 45
-    crop_min, crop_max = 0.15, 0.35  # 5%–15% crop
+    contrast_min, contrast_max = -4.0, 4.0
+    brightness_min, brightness_max = -2, 2
+    rotation_min, rotation_max = -25, 25
+    crop_min, crop_max = 0.10, 0.35  # 5%–15% crop
 
     for vf in vids:
         try:
