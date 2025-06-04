@@ -24,6 +24,9 @@ from billing import subscription_bp, referral_bp
 # Import Google OAuth helpers
 from google_drive import start_auth, handle_callback
 
+# Import token.py
+from tokens import deduct_tokens, reset_user_tokens, get_plan_tokens
+
 # ---- Import your image and video processing logic ----
 from image_videoprocessing import process_images_logic, process_videos_logic
 
