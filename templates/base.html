@@ -70,6 +70,13 @@ body {
         {% endif %}
     </span>
     <span><b>Tokens left:</b> <span id="tokens-left">{{ current_user.tokens }}</span></span>
+    <!-- Purchase Token Top-Up Button START -->
+    <a href="{{ url_for('subscription.purchase_topup') }}"
+       class="user-actions"
+       style="background:#43a047;color:#fff;border-color:#43a047;">
+        Purchase Token Top-Up
+    </a>
+    <!-- Purchase Token Top-Up Button END -->
     <span class="user-actions" style="margin-left:auto;">
         <a href="{{ url_for('settings') }}">Settings</a>
         <a href="{{ url_for('logout') }}">Logout</a>
