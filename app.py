@@ -65,7 +65,8 @@ class User(UserMixin, db.Model):
     referrals       = db.relationship(
         'User', backref=db.backref('referrer', remote_side=[id]), lazy='dynamic'
     )
-
+    billing_anchor = db.Column(db.DateTime, nullable=True)
+    
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
