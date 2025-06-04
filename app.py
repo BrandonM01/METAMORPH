@@ -325,3 +325,9 @@ app.register_blueprint(referral_bp,     url_prefix='/referral')
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
+# -------------------- tokens left real time --------------------
+@app.route('/tokens-left')
+@login_required
+def tokens_left():
+    return jsonify({'tokens_left': current_user.tokens})
