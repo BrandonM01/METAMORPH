@@ -17,3 +17,5 @@ class User(UserMixin, db.Model):
 
     referral_code = db.Column(db.String(20), unique=True, nullable=True)
     referred_by = db.Column(db.String(20), nullable=True)
+
+    billing_anchor = db.Column(db.DateTime, nullable=True)
