@@ -8,6 +8,23 @@ import stripe
 from flask import Blueprint, request, jsonify, url_for
 from flask_login import login_required, current_user
 
+from app import db, User
+
+# Define plan token allocations
+PLAN_TOKEN_AMOUNTS = {
+    'Free': 50,
+    'Pro': 1000,
+    'pro+': 2500,
+    # Add more plans as needed
+}
+
+def reset_all_user_tokens():
+    for plan, tokens in PLAN_TOKEN_AMOUNTS.items():
+        users = User.query.filter_by(plan=plan).all()
+        for user in users:
+            user.tokens = tokens
+    db.session.commit()
+
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
 
 subscription_bp = Blueprint('subscription', __name__)
@@ -46,18 +63,14 @@ def webhook_received():
         event = stripe.Webhook.construct_event(payload, sig, os.getenv('STRIPE_WEBHOOK_SECRET'))
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-    if event['type'] == 'invoice.payment_succeeded':
-        inv = event['data']['object']
-        user = User.query.filter_by(stripe_subscription_id=inv['subscription']).first()
-        if user:
-            user.tokens += 100
-            db.session.commit()
+    # Removed invoice.payment_succeeded token topup
     if event['type'] == 'customer.subscription.created':
         sub = event['data']['object']
         user = User.query.filter_by(stripe_customer_id=sub['customer']).first()
         if user:
             user.plan = sub['items']['data'][0]['price']['nickname']
             user.stripe_subscription_id = sub['id']
+            user.tokens = PLAN_TOKEN_AMOUNTS.get(user.plan, 0)  # Give full tokens on signup
             db.session.commit()
     return jsonify({'status': 'success'})
 
