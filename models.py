@@ -19,3 +19,5 @@ class User(UserMixin, db.Model):
     referred_by = db.Column(db.String(20), nullable=True)
 
     billing_anchor = db.Column(db.DateTime, nullable=True)
+
+    drive_folder_id = db.Column(db.String(300), nullable=True)
