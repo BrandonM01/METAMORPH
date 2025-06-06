@@ -1,0 +1,32 @@
+name: Monthly Token Reset
+
+on:
+  schedule:
+    - cron: '0 0 1 * *' # Runs at 00:00 UTC on the 1st of every month
+  workflow_dispatch:      # Allows manual triggering
+
+jobs:
+  reset-tokens:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run monthly token reset
+        env:
+          # Add any secrets/env needed for your script to connect to your database!
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          # Add your DB credentials as secrets and pass them here, e.g.:
+          # DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python run_monthly_token_reset.py
