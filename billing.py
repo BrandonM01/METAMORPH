@@ -63,7 +63,7 @@ def webhook_received():
         event = stripe.Webhook.construct_event(payload, sig, os.getenv('STRIPE_WEBHOOK_SECRET'))
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-    # Removed invoice.payment_succeeded token topup
+    # Removed per-invoice token top-up
     if event['type'] == 'customer.subscription.created':
         sub = event['data']['object']
         user = User.query.filter_by(stripe_customer_id=sub['customer']).first()
